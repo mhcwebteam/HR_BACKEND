@@ -5,10 +5,14 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use App\Models\Stationary;
 use App\Models\Test;
+use App\Models\AllApprovals;
 use App\Models\StationaryUpload;
 use App\Models\SubStationary;
+use App\Models\Participant;
+use Carbon\Carbon;
+use Illuminate\Container\Attributes\Log;
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
 
@@ -33,45 +37,72 @@ class StationaryController extends Controller
             'email'       =>  $data['email'], 
             'emp_id'      =>  $data['emp_id'],
             'department'  =>  $data['department'],
+
             //if the hod raise the Stationary Request here 
             //The Flow will HOD->Stores
             //If the Common user 
             'raiser_date' => \Carbon\Carbon::now()->format('Y-m-d h:i:s'),
             'current_user'=>  $data['hod_name'],
             'current_date' => \Carbon\Carbon::now()->format('Y-m-d h:i:s'),
-            'current_status'   => 'TO_DO',
-            'current_task'     =>($this->userCategory=='HOD'?"Stores":'HOD'), 
-            "hod_name"		=>  ($this->userCategory=='HOD'?$this->UserName:null) ,
-		    "hod_status"	=>  ($this->userCategory=='HOD'?"Approve":null) ,
+            'current_status' => 'TO_DO',
+            'current_task'  =>  ($this->userCategory=='HOD'?"Stores":'HOD'), 
+            "hod_name"      =>  ($this->userCategory=='HOD'?$this->UserName:null) ,
+            "hod_status"    =>  ($this->userCategory=='HOD'?"Approve":null) ,
             "hod_aprvl_date" => ($this->userCategory == 'HOD' ? \Carbon\Carbon::now('Asia/Kolkata')->format('Y-m-d H:i:s') : null),
-	        ]);
+            ]);
+            //AllApproval table---
+                $aprvlsUpdate = new  AllApprovals();
+                $aprvlsUpdate->create([
+                "CASEID"=>$stationaryStore->case_id,
+                "PROCESSNAME"=>"Stationary",
+                'CUR_TASK'=>    'HOD',
+                'CUR_STATUS'=>  'TO_DO',
+                'CUR_USR'=>     $data['hod_name'],
+                'PREV_USR'=>     Auth::user()->Emp_Name,//Raiser or Approval One here 
+                'LAST_MODIFIED'=> \Carbon\Carbon::now()->format('Y-m-d H:i:s'),
+                ]);
+        //Particpants table here 
+            $participants =  new Participant();
+            $participants->create([
+                  "CASEID"        =>  $stationaryStore->case_id,
+                  "PROCESSNAME"   =>  "Stationary", 
+                  "TASK_NAME"     =>  "Raiser",
+                  "ACTION_UID"    =>  Auth::user()->Emp_Name,
+                  "ACTION_STATUS" => "TO_DO",
+                  "RAISER"        =>  Auth::user()->Emp_Name,
+                  "CURRENT_USER"=>$data['hod_name'],
+                  "TASK_COUNT"    => 1
+            ]);
         foreach ($data['items'] as $item) 
         {
-            SubStationary::create([
+            SubStationary::create(
+            [  
                 'stationary' => $item['stationary'],
                 'case_id'    => $stationaryStore->case_id,
                 'Quantity'   => $item['quantity'],
                 'sub_status' => ($this->userCategory =="HOD"?"Approve":"TO_DO"),
-            ]);
+            ]
+        );
         }
         return response()->json(["success" => "Data Stored Successfully", "status" => 201]);
     }
-    
-    public function getStationaryData()
+    public function getStationaryData(Request $request)
     {
-        $user = Auth::user()->Emp_Name;
+        $user      =  Auth::user()->Emp_Name;
+        $userIsEmp =  Auth::user()->Is_Employee;
         try
         {
             $getData = null;
-            if($this->userIsEmp==2)//stores-------------
+            $allApprovalData = AllApprovals::where('CUR_USR',$user)->where('CUR_STATUS',"TO_DO")->get();
+            if($userIsEmp==2)
             {
-              $getData = Stationary::where('current_user', $user)->where("hod_status","Approve")->where("current_status","TO_DO")->get();
+              $getData = Stationary::where('current_user', $user)->where("hod_status","Approve")->where("current_status","TO_DO")->get(); 
             }
-            else // normally hod-----
+            else
             {              
                 $getData = Stationary::where('current_user', $user)->where("current_status","TO_DO")->get();
             }
-          return response()->json(['status'=> 200 ,"data"=> $getData]);
+          return response()->json(['status'=> 200 ,"data"=> $getData,'allAprvls'=>$allApprovalData]);
         }
         catch(\Exception)
         {
@@ -88,35 +119,45 @@ class StationaryController extends Controller
  public function StatParticipantData(Request $request)
  {
     try
-  {
+   {
      $user = Auth::user()->Emp_Name;
-    // Get requests raised by the logged-in user
-    $statParticipantsData = Stationary::where('name', $user)->get();
-    // Get requests where the logged-in user is the current handler
-    $statUnderEmpsData = Stationary::where('current_user', $user)->get();
-    // Merge both collections into one
-    $mergedData = $statParticipantsData->merge($statUnderEmpsData);
+     $caseIdsAry=[];
+     $statParticipantsData = Participant::where('ACTION_UID', $user)->get();
+     foreach($statParticipantsData as $st)
+     {
+       $caseIdsAry[]=$st->CASEID;
+     }
+     $arrayList=[];
+     foreach($caseIdsAry as $CASEID)
+     {
+        $lastRecord = Participant::where('CASEID', $CASEID)->orderByDesc('TASK_COUNT')->first();
+        $arrayList[] = $lastRecord;
+     }
+    $data = $arrayList;
     return response()->json([
         "status" => 200,
-        "message" => "User Data Fetched Successfully",
-        "data" => $mergedData
-    ]); 
+        "message" => "Participant Data Fetched Successfully",
+        "participantData" => $data
+    ]);
+  
    }    
    catch(\Exception $e)
     {
-        return response()->json(["status"=>500,"message"=>"Internal Server Error","error"=>$e->message]);
+        return response()->json(["status"=>500,"message"=>"Internal Server Error"]);
     }
  }
    public function  getStatUserDataById($case_id)
    {
     try
     {
-        $Stationarydata = DB::table('stationarys')->where('stationarys.case_id', $case_id)->get();
-        $SubStationaryData=DB::table('substationary')->where('substationary.case_id', $case_id)->get();
+        $Stationarydata    = DB::table('stationarys')->where('stationarys.case_id', $case_id)->get();
+        $SubStationaryData = DB::table('substationary')->where('substationary.case_id', $case_id)->get();
         return response()->json(
-            ["status"=>200,"message"=>"Employee Data Fetched Successfully",
-             "success"=>'success',
-             'Stationary_data'=>$Stationarydata,"SubStationary_data"=>$SubStationaryData]
+            [ 
+               "status"=>200 , "message"=> "Employee Data Fetched Successfully",
+               "success"=>'success',
+               'Stationary_data'=>$Stationarydata,"SubStationary_data"=>$SubStationaryData
+            ]
         );
     }
     catch(\Exception $e)
@@ -124,13 +165,13 @@ class StationaryController extends Controller
         return response()->json(["status"=>500,"message"=>"Internal Server Error","Fail"=>"Fail"]);
      }
    }
-/*---------------------------------Stationary HOD Approve Here------------------------------*/
+   /*----------------------------Stationary HOD Approve Here-----------------------------*/
    public function StatHodApproval(Request $request)
    {
        try 
        {
-           $subStat = $request->input('subStat',[]);
-           $hod_aprvl_data = $request->input('UserData',[]);
+           $subStat = $request->input('subStat', []);
+           $hod_aprvl_data = $request->input('UserData', []);
            if (empty($subStat)) 
            {
                return response()->json([
@@ -140,107 +181,80 @@ class StationaryController extends Controller
                ]);
            }
            $case_id = $subStat[0]['case_id'] ?? null;
-           if(!($this->userIsEmp == 2))
+           foreach ($subStat as $sub) 
            {
-                    foreach ($subStat as $sub) 
-                    {
-                        $subStatUpdate = SubStationary::where('substationary_id', $sub['substationary_id'])->first();
-                        if ($subStatUpdate) 
-                        {
-                            $subStatUpdate->Quantity = $sub['Quantity'] ?? "";
-                            $subStatUpdate->hod_comments = $sub['Comments'] ?? "";
-                            $subStatUpdate->sub_status="Approve";
-                            if (!$subStatUpdate->save()) 
-                            {
-                                \Log::error("❌ Failed to save SubStationary ID: " . $subStatUpdate->substationary_id);
-                            } else 
-                            {
-                                \Log::info("✅ Updated SubStationary ID: " . $subStatUpdate->substationary_id);
-                            }
-                        }
-                    }
-                    // Update main Stationary approval details only once (outside the loop)
-                    if ($case_id) 
-                    {
-                        $statStatus = Stationary::where('case_id', $case_id)->first();
-                        if ($statStatus) 
-                        {
-                            $statStatus->hod_name = $hod_aprvl_data['hod_name'] ?? '';
-                            $statStatus->hod_status = "Approve";
-                            $statStatus->hod_aprvl_date = now();
-                            $statStatus->current_user = "Shiva.J";
-                            $statStatus->current_task = "Store";
-                            $statStatus->current_status = "TO_DO";
-                            $statStatus->save();
-                            \Log::info("✅ Stationary updated for case_id: " . $case_id);
-                        } 
-                        else 
-                        {
-                            \Log::warning("⚠️ Stationary not found for case_id: " . $case_id);
-                        }
-                    }
+               $subStatUpdate = SubStationary::where('substationary_id', $sub['substationary_id'])->first();
+               if ($subStatUpdate)
+               {
+                   $subStatUpdate->Quantity = $sub['Quantity'] ?? "";
+                   $subStatUpdate->hod_comments = $sub['Comments'] ?? "";
+                   $subStatUpdate->sub_status="Approve";
+                   if (!$subStatUpdate->save()) 
+                   {
+                       \Log::error("❌ Failed to save SubStationary ID: " . $subStatUpdate->substationary_id);
+                   } else {
+                       \Log::info("✅ Updated SubStationary ID: " . $subStatUpdate->substationary_id);
+                   }
+                }
            }
-           else
+           // Update main Stationary approval details only once (outside the loop)
+           if ($case_id) 
            {
-                  foreach ($subStat as $sub) 
-                    {
-                        $subStatUpdate = SubStationary::where('substationary_id', $sub['substationary_id'])->first();
-                        if ($subStatUpdate) 
-                        {
-                            $subStatUpdate->Quantity = $sub['Quantity'] ?? "";
-                             $subStatUpdate->sub_status = "Completed";
-                            $subStatUpdate->storeshead_comment = $sub['storeshead_comment'] ?? "";
-                            $subStatUpdate->store_status="Approve";
-                            if (!$subStatUpdate->save()) 
-                            {
-                                \Log::error("❌ Failed to save SubStationary ID: " . $subStatUpdate->substationary_id);
-                            } else {
-                                \Log::info("✅ Updated SubStationary ID: " . $subStatUpdate->substationary_id);
-                            }
-                        }
-                    }
-                    // Update main Stationary approval details only once (outside the loop)
-                    if ($case_id) 
-                    {
-                        $statStatus = Stationary::where('case_id', $case_id)->first();
-                        if ($statStatus) 
-                        {
-                            $statStatus->stores_name = $hod_aprvl_data['hod_name']??'';
-                            $statStatus->stores_status = "Approve";
-                            $statStatus->stores_aprvl_date = now();
-                            $statStatus->current_user = "Shiva.J";
-                            $statStatus->current_task = "Store";
-                            $statStatus->current_status = "Approve";
-                            $statStatus->save();
-                            \Log::info("✅ Stationary updated for case_id: " . $case_id);
-                        } else 
-                        {
-                            \Log::warning("⚠️ Stationary not found for case_id: " . $case_id);
-                        }
-                    }
+                $statStatus = Stationary::where('case_id', $case_id)->first();
+                $aprvlsUpdate = AllApprovals::where('CASEID',$case_id)->first();
+                $aprvlsUpdate->update([
+                'CUR_TASK'=>    'Store',
+                'CUR_STATUS'=>  'TO_DO',
+                'CUR_USR'=>      "Shiva.J",
+                'PREV_USR'=>     Auth::user()->Emp_Name,//Raiser or Approval One here 
+                'LAST_MODIFIED'=> \Carbon\Carbon::now()->format('Y-m-d H:i:s'),
+                ]);
+               if ($statStatus) 
+               {
+                   $statStatus->hod_name = $hod_aprvl_data['hod_name'] ?? '';
+                   $statStatus->hod_status = "Approve";
+                   $statStatus->hod_aprvl_date = now();
+                   $statStatus->current_user = "Shiva.J";
+                   $statStatus->current_task = "Store";
+                   $statStatus->current_status = "TO_DO";
+                   $statStatus->save();
+                   \Log::info("✅ Stationary updated for case_id: " . $case_id);
+               } 
+               else {
+                   \Log::warning("⚠️ Stationary not found for case_id: " . $case_id);
+               }
            }
+            $participants =  new Participant();
+            $participants->create([
+                  "CASEID"        =>  $case_id,
+                  "PROCESSNAME"   =>  "Stationary", 
+                  "TASK_NAME"     =>  "HOD",
+                  "ACTION_UID"    =>  Auth::user()->Emp_Name,
+                  "ACTION_STATUS" => "TO_DO",
+                  "RAISER"        =>  Auth::user()->Emp_Name,
+                  "CURRENT_USER"=> "Shiva.J",
+                  "TASK_COUNT"    => 2
+            ]);
            return response()->json([
                "status" => 200,
                "message" => "SubStatData updated successfully.",
                "success" => true
            ]);
-       }
-        catch (\Exception $e) 
+       } 
+       catch (\Exception $e) 
        {
            \Log::error("SubStatApproval Error: " . $e->getMessage());
-   
-           return response()->json([
+            return response()->json([
                "status" => 500,
                "message" => "Internal Server Error",
                "success" => false
-           ]);
+            ]);
        }
-   } 
-//<---------------------------Stationary HOD Reject here------------------------------------------->
+   }
+//<----------------Stationary HOD Reject here-------------------------->
    public function StatHodReject(Request $request)
    {
-       try 
-       {
+       try {
            $subStat = $request->input('subStat', []);
            $hod_aprvl_data = $request->input('UserData', []);
            if (empty($subStat)) 
@@ -263,33 +277,56 @@ class StationaryController extends Controller
                    if (!$subStatUpdate->save()) 
                    {
                        \Log::error("❌ Failed to save SubStationary ID: " . $subStatUpdate->substationary_id);
-                   } 
-                   else 
+                   }
+                    else 
                    {
                        \Log::info("✅ Updated SubStationary ID: " . $subStatUpdate->substationary_id);
                    }
                }
            }
            // Update main Stationary approval details only once (outside the loop)
-           if ($case_id) {
-               $statStatus = Stationary::where('case_id', $case_id)->first();
-               if ($statStatus) {
+           if ($case_id) 
+           {
+                $statStatus   =   Stationary::where('case_id', $case_id)->first();
+                $aprvlsUpdate =   AllApprovals::where('CASEID',$case_id)->first();
+                $aprvlsUpdate->update([
+                     'CUR_TASK'=>     'Store',
+                     'CUR_STATUS'=>   'Reject',
+                     'CUR_USR'=>      "Shiva.J",
+                     'PREV_USR'=>      Auth::user()->Emp_Name,//Raiser or Approval One here 
+                     'LAST_MODIFIED'=> \Carbon\Carbon::now()->format('Y-m-d H:i:s'),
+                ]);
+               if ($statStatus) 
+               {
                    $statStatus->hod_name = $hod_aprvl_data['hod_name'] ?? '';
                    $statStatus->hod_status = "Approve";
                    $statStatus->hod_aprvl_date = now();
                    $statStatus->save();
                    \Log::info("✅ Stationary updated for case_id: " . $case_id);
-               } else {
+               } 
+               else 
+               {
                    \Log::warning("⚠️ Stationary not found for case_id: " . $case_id);
                }
            }
+
+            $participants =  new Participant();
+            $participants->create([
+                  "CASEID"         =>  $case_id,
+                  "PROCESSNAME"    =>  "Stationary", 
+                  "TASK_NAME"      =>  "HOD",
+                  "ACTION_UID"     =>  Auth::user()->Emp_Name,
+                   "ACTION_STATUS" => "TO_DO",
+                   "RAISER"        =>  Auth::user()->Emp_Name,
+                   "CURRENT_USER"  => "Shiva.J",
+                   "TASK_COUNT"    => 2
+            ]);
            return response()->json([
                "status" => 200,
                "message" => "SubStatData updated successfully.",
                "success" => true
            ]);
-       } catch (\Exception $e) 
-       {
+       } catch (\Exception $e) {
            \Log::error("SubStatApproval Error: " . $e->getMessage());
            return response()->json([
                "status" => 500,
@@ -298,70 +335,200 @@ class StationaryController extends Controller
            ]);
        }
    }
-public function statUploadData(Request $request)
+/*-------------------------------------StatStoreApproval--------------------------------**/
+public function statStoreApproval(Request $request)
 {
-    try
-    {
-       if (!$request->hasFile('file')) 
-        {
-            return response()->json(['error' => 'No file uploaded.'], 400);
-        }
-        $file = $request->file('file');
-        try 
-        {
-            if($file)
-            {
-            $spreadsheet = IOFactory::load($file->getRealPath());
-            $sheet = $spreadsheet->getActiveSheet();
-            $rows = $sheet->toArray();
-            $insertData = [];
-            foreach ($rows as $index => $row) 
-            {
-                // Skip empty and header rows
-                if ($index < 4) continue;
-                // Designation is in column 3 (index 3)
-                if (empty($row[3])) continue;
-                $insertData[] = 
-                [
-                    'Plant_code'         => $request->PlantCode ?? '',
-                    'Designation'        => $row[3] ?? '',
-                    'Department'         => '', // You can map from column 4 if needed
-                    'Total_Requirement'  => $row[5] ?? '',
-                    'Availability'       => $row[6] ?? '',
-                    'Actual_Requirement' => $row[7] ?? '',
-                ];
-            }
-               if (empty($insertData)) 
-                {
-                    return response()->json(['error' => 'No valid data found in the file.'], 400);
+    try 
+       {
+           $subStoreStat     = $request->input('subStat', []);
+           $store_aprvl_data = $request->input('UserData', []);
+           if (empty($subStoreStat)) 
+           {
+               return response()->json([
+                   "status" => 400,
+                   "message" => "No subStat data provided.",
+                   "success" => false
+               ]);
+           }
+           $case_id = $subStoreStat[0]['case_id'] ?? null;
+           foreach ($subStoreStat as $subStore) 
+           {
+               $subStatStoreUpdate = SubStationary::where('substationary_id', $subStore['substationary_id'])->first();
+               if ($subStatStoreUpdate)
+               {
+                   $subStatStoreUpdate->Quantity = $sub['Quantity'] ?? "";
+                   $subStatStoreUpdate->storeshead_comment = $sub['storeshead_comment'] ?? "";
+                   $subStatStoreUpdate->storeshead_status="Approve";
+                   if (!$subStatStoreUpdate->save()) 
+                   {
+                       \Log::error("❌ Failed to save SubStationary ID: " . $subStatStoreUpdate->substationary_id);
+                   } else {
+                       \Log::info("✅ Updated SubStationary ID: " . $subStatStoreUpdate->substationary_id);
+                   }
                 }
-               DB::table('man_power_upload')->insert($insertData);
-            }
-            else
+           }
+          //Participats Update--
+           $participants =  new Participant();
+            $participants->create([
+                  "CASEID"        =>  $case_id,
+                  "PROCESSNAME"   =>  "Stationary", 
+                  "TASK_NAME"     =>  "Store",
+                  "ACTION_UID"    =>  Auth::user()->Emp_Name,
+                  "ACTION_STATUS" => "Completed",
+                  "RAISER"        =>  Auth::user()->Emp_Name,
+                  "CURRENT_USER"  => "Shiva.J",
+                  "TASK_COUNT"    => 3
+            ]);
+            $updateParticipants=Participant::where('CASEID',$case_id)->get();
+            foreach($updateParticipants as $partics)
             {
-                foreach($request->stationary_items as $statItem)
-                {
-                    $statUploadData = new StationaryUpload();
-                    $statUploadData->Invoice_Number=$request->Invoice_Number;
-                    $statUploadData->emp_id=Auth::user()->Legacy_Id;
-                    $statUploadData->emp_name=Auth::user()->Emp_Name;
-                    $statUploadData->stationary_items=$statItem[''];
-                    $statUploadData->quantity=$statItem['quantity'];
-                }
-
+                $partics->update([
+                    "ACTION_STATUS"=>"Completed"
+                ]);
             }
-            return response()->json(['message' => 'Upload successful']);
-        } 
-        catch (\Exception $e) 
-        {
-            return response()->json(['error' => 'Error processing file: ' . $e->getMessage()], 500);
-        }
-    }
+           // Update main Stationary approval details only once (outside the loop)
+           if ($case_id) 
+           {
+               $statStoreStatus = Stationary::where('case_id', $case_id)->first();
+                $aprvlsUpdate =   AllApprovals::where('CASEID',$case_id)->first();
+                $aprvlsUpdate->update([
+                'CUR_TASK'=>     'Store',
+                'CUR_STATUS'=>   'Approve',
+                'CUR_USR'=>      "Shiva.J",
+                'PREV_USR'=>      Auth::user()->Emp_Name,//Raiser or Approval One here 
+                'LAST_MODIFIED'=> \Carbon\Carbon::now()->format('Y-m-d H:i:s'),
+                ]);
+               if ($statStoreStatus) 
+               {
+                //    $statStoreStatus->hod_name = $store_aprvl_data['hod_name'] ?? '';
+                //    $statStoreStatus->hod_status = "Approve";
+                //    $statStoreStatus->hod_aprvl_date = now();
+                   $statStoreStatus->current_user = "Shiva.J";
+                   $statStoreStatus->current_task = "Store";
+                   $statStoreStatus->current_status   = "Approve";
+                   $statStoreStatus->stores_name      = "Shiva.J";
+                   $statStoreStatus->stores_aprvl_date = now();
+                   $statStoreStatus->stores_status     = "Approve";
+                   $statStoreStatus->save();
+                   \Log::info("✅ Stationary updated for case_id: " . $case_id);
+               } 
+               else 
+               {
+                   \Log::warning("⚠️ Stationary not found for case_id: " . $case_id);
+               }
+           }
+           return response()->json([
+               "status" => 200,
+               "message" => "SubStatData updated successfully.",
+               "success" => true
+           ]);
+       } 
     catch(\Exception $e)
     {
-        return response()->json(["status"=>500,"message"=>"Internal Server Error","error"=>$e]);
+        return  response()->json(['status'=>500,"message"=>"Internal Server Error","Fail"=>"Fail"]);
     }
 }
 
-}
+public function StationaryUpload(Request $request)
+    {
+        try {
+            $request->validate([
+                'invoice_number' => 'required',
+                'invoicedate' => 'required|date', // Changed to match frontend field name
+                'stationary_items' => 'required|array',
+                'stationary_items.*.name' => 'required|string',
+                'stationary_items.*.quantity' => 'required|numeric',
+            ]);
 
+            $emp_id = Auth::user()->Legacy_Id ?? Auth::user()->Emp_Id ?? 'EMP001'; // fallback for testing
+            $emp_name = Auth::user()->Emp_Name ?? Auth::user()->employee ?? 'Test User';
+
+            foreach ($request->stationary_items as $item) {
+                StationaryUpload::create([
+                    'Invoice_Number' => $request->invoice_number,
+                    'emp_id' => $emp_id,
+                    'emp_name' => $emp_name,
+                    'stationary_items' => $item['name'],
+                    'quantity' => $item['quantity'],
+                    'Invoice_Date' => $request->invoicedate, // Changed to match frontend field name
+                    // You can also store remarks if your model supports it
+                    // 'remarks' => $item['remarks'] ?? null,
+                ]);
+            }
+
+            return response()->json([
+                "status" => 200,
+                "message" => "Store data saved successfully",
+                "success" => true
+            ]);
+        } catch (\Exception $e) {
+            Log::error("Push to Store Error: " . $e->getMessage());
+
+            return response()->json([
+                "status" => 500,
+                "message" => "Internal Server Error: " . $e->getMessage(),
+                "success" => false,
+                "error" => $e->getMessage()
+            ]);
+        }
+    }
+    public function empStationaryUpload(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'file' => 'required|file|mimes:xlsx,xls,csv|max:10240', // 10MB max
+            'invoicedate' => 'required|date', // Changed to match frontend field name
+        ]);
+
+        if ($validator->fails()) 
+        {
+            return response()->json([
+                'status' => false,
+                'message' => 'Validation Error',
+                'errors' => $validator->errors(),
+                'success' => false
+            ], 422);
+        }
+
+        try {
+            $user = Auth::user(); // Optional: use this if needed
+            // Load spreadsheet
+            $spreadsheet = IOFactory::load($request->file('file'));
+            $sheet = $spreadsheet->getActiveSheet();
+            $rows = $sheet->toArray(null, true, true, true);
+
+            $headerSkipped = false;
+            foreach ($rows as $row) {
+                if (!$headerSkipped) {
+                    $headerSkipped = true;
+                    continue;
+                }
+                // Insert into DB
+                StationaryUpload::create([
+                    'Invoice_Number' => $row['A'] ?? null,
+                    'emp_id' => $row['B'] ?? null,
+                    'emp_name' => $row['C'] ?? null,
+                    'stationary_items' => $row['D'] ?? null,
+                    'quantity' => $row['E'] ?? null,
+                    'Invoice_Date' => $request->invoicedate ?? Carbon::now()->toDateString(), // Changed to match frontend field name
+                ]);
+            }
+
+            return response()->json([
+                'status' => 200,
+                'message' => 'File uploaded and data saved successfully',
+                'success' => true
+            ], 200);
+
+        } catch (\Exception $e) {
+            Log::error('Stationery upload error: ' . $e->getMessage());
+            Log::error($e->getTraceAsString());
+
+            return response()->json([
+                'status' => 500,
+                'message' => 'File upload failed',
+                'error' => $e->getMessage(),
+                'success' => false
+            ], 500);
+        }
+    }
+}

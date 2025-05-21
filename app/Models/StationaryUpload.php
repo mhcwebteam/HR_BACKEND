@@ -15,5 +15,7 @@ class StationaryUpload extends Model
         'emp_name',
         'stationary_items',
         'quantity',
+         'Invoice_Date', 
     ];
+
 }

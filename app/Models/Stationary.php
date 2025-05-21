@@ -28,10 +28,13 @@ class Stationary extends Model
         'hod_name',
         'hod_status',
         'hod_aprvl_date',
-        'stationary_name',
-        'stationary_status',
-        'stationary_aprvl_date',
-        'overall_comment'
+        // 'stationary_name',
+        // 'stationary_status',
+        // 'stationary_aprvl_date',
+        'overall_comment',
+        "stores_name"	,	
+		"stores_status"	,	
+		"stores_aprvl_date"	,
     ];
 
 

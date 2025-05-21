@@ -6,6 +6,8 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ManPowerController;
+// use App\Http\Controllers\StationaryUploadController;
+// use App\Http\Controllers\StoreController;
 use App\Http\Controllers\UserController;
 use App\Models\StationaryUpload;
 
@@ -15,6 +17,8 @@ Route::get('emp-stationary-data', function () {
 
 Route::post('register',    [AuthController::class, 'register']);
 Route::post('login'   ,    [AuthController::class, 'login'   ]);
+
+
    
 Route::get('hello',function(){
   return response()->json(["message"=>"message thuis"]);
@@ -38,12 +42,13 @@ Route::get('hello',function(){
     Route::post('man-power-store',[ManPowerController::class,"manPowerStore"]);
     Route::get('get-users',[UserController::class,"getUsers"]);
     Route::get('gt-stat-userId/{case_id}',[StationaryController::class,"getStatUserDataById"]);
-    Route::get('gt-stat-partics-data',[StationaryController::class,"StatParticipantData"]);
     Route::post('subStat-updt',[StationaryController::class,"subStatApproval"]);
     Route::post('stat-hod-aprvl',[StationaryController::class,"StatHodApproval"]);
     Route::post('stat-hod-rejct',[StationaryController::class,"StatHodReject"]);
     Route::post('stat-store-approval',[StationaryController::class,"statStoreApproval"]);
     Route::post('stat-upload',[StationaryController::class,'statUploadData']);
-  });
+    Route::post('store-upload',[StationaryController::class,'StationaryUpload']);
+    Route::get('participants',[StationaryController::class,'StatParticipantData']);
+    });
 
 
