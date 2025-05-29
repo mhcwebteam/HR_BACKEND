@@ -231,7 +231,7 @@ class StationaryController extends Controller
                   "TASK_NAME"     =>  "HOD",
                   "ACTION_UID"    =>  Auth::user()->Emp_Name,
                   "ACTION_STATUS" => "TO_DO",
-                  "RAISER"        =>  Auth::user()->Emp_Name,
+                  "RAISER"        =>  $statStatus->name,
                   "CURRENT_USER"=> "Shiva.J",
                   "TASK_COUNT"    => 2
             ]);
@@ -317,7 +317,7 @@ class StationaryController extends Controller
                   "TASK_NAME"      =>  "HOD",
                   "ACTION_UID"     =>  Auth::user()->Emp_Name,
                    "ACTION_STATUS" => "TO_DO",
-                   "RAISER"        =>  Auth::user()->Emp_Name,
+                   "RAISER"        =>  $statStatus->name,
                    "CURRENT_USER"  => "Shiva.J",
                    "TASK_COUNT"    => 2
             ]);
@@ -367,25 +367,7 @@ public function statStoreApproval(Request $request)
                    }
                 }
            }
-          //Participats Update--
-           $participants =  new Participant();
-            $participants->create([
-                  "CASEID"        =>  $case_id,
-                  "PROCESSNAME"   =>  "Stationary", 
-                  "TASK_NAME"     =>  "Store",
-                  "ACTION_UID"    =>  Auth::user()->Emp_Name,
-                  "ACTION_STATUS" => "Completed",
-                  "RAISER"        =>  Auth::user()->Emp_Name,
-                  "CURRENT_USER"  => "Shiva.J",
-                  "TASK_COUNT"    => 3
-            ]);
-            $updateParticipants=Participant::where('CASEID',$case_id)->get();
-            foreach($updateParticipants as $partics)
-            {
-                $partics->update([
-                    "ACTION_STATUS"=>"Completed"
-                ]);
-            }
+          
            // Update main Stationary approval details only once (outside the loop)
            if ($case_id) 
            {
@@ -417,6 +399,27 @@ public function statStoreApproval(Request $request)
                    \Log::warning("⚠️ Stationary not found for case_id: " . $case_id);
                }
            }
+
+           //Participats Update--
+           $participants =  new Participant();
+            $participants->create([
+                  "CASEID"        =>  $case_id,
+                  "PROCESSNAME"   =>  "Stationary", 
+                  "TASK_NAME"     =>  "Store",
+                  "ACTION_UID"    =>  Auth::user()->Emp_Name,
+                  "ACTION_STATUS" => "Completed",
+                  "RAISER"        =>  $statStoreStatus->name,
+                  "CURRENT_USER"  => "Shiva.J",
+                  "TASK_COUNT"    => 3
+            ]);
+            $updateParticipants=Participant::where('CASEID',$case_id)->get();
+            foreach($updateParticipants as $partics)
+            {
+                $partics->update([
+                    "ACTION_STATUS"=>"Completed"
+                ]);
+            }
+
            return response()->json([
                "status" => 200,
                "message" => "SubStatData updated successfully.",
@@ -531,4 +534,75 @@ public function StationaryUpload(Request $request)
             ], 500);
         }
     }
+    
+    public function getStationaryDataByCase($caseId)
+    {
+      //  dd($caseId);
+        try {
+            $stationaryData = Stationary::with('subStationaryItems')
+                ->where('case_id', $caseId)
+                ->first();
+
+            if (!$stationaryData) {
+                return response()->json([
+                    'status' => 404,
+                    'message' => 'No data found for the specified case_id',
+                    'data' => null,
+                    'success' => false
+                ]);
+            }
+
+            $formattedData = [
+                'case_id' => $stationaryData->case_id,
+                'name' => $stationaryData->name,
+                'email' => $stationaryData->email,
+                'emp_id' => $stationaryData->emp_id,
+                'department' => $stationaryData->department,
+                'request_for' => $stationaryData->request_for,
+                'raiser_date' => $stationaryData->raiser_date,
+                'hod_name' => $stationaryData->hod_name,
+                'hod_status' => $stationaryData->hod_status,
+                'hod_aprvl_date' => $stationaryData->hod_aprvl_date,
+                'stores_name' => $stationaryData->stores_name,
+                'stores_status' => $stationaryData->stores_status,
+                'stores_aprvl_date' => $stationaryData->stores_aprvl_date,
+                'current_user' => $stationaryData->current_user,
+                'current_task' => $stationaryData->current_task,
+                'current_status' => $stationaryData->current_status,
+                'overall_comment' => $stationaryData->overall_comment,
+                'stationary_items' => $stationaryData->subStationaryItems->map(function ($item) {
+                    return [
+                        'substationary_id' => $item->substationary_id,
+                        'stationary' => $item->stationary,
+                        'quantity' => $item->Quantity,
+                        'sub_status' => $item->sub_status,
+                        'hod_comments' => $item->hod_comments,
+                        'storeshead_comment' => $item->storeshead_comment,
+                        'storeshead_status' => $item->storeshead_status
+                    ];
+                })->toArray()
+            ];
+
+            return response()->json([
+                'status' => 200,
+                'message' => "Stationary data for case_id {$caseId} fetched successfully",
+                'data' => $formattedData,
+                'success' => true
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("getStationaryDataByCase Error: " . $e->getMessage());
+
+            return response()->json([
+                'status' => 500,
+                'message' => 'Internal Server Error',
+                'error' => config('app.debug') ? $e->getMessage() : 'Something went wrong',
+                'success' => false
+            ]);
+        }
+    }
 }
+
+
+
+
+

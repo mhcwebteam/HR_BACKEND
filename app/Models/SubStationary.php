@@ -16,5 +16,9 @@ class SubStationary extends Model
         "Comments",
         "sub_status"
     ];
+    public function stationary()
+    {
+        return $this->belongsTo(Stationary::class, 'case_id', 'case_id');
+    }
 
 }

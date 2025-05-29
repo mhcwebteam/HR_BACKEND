@@ -36,7 +36,10 @@ class Stationary extends Model
 		"stores_status"	,	
 		"stores_aprvl_date"	,
     ];
-
+      public function subStationaryItems()
+    {
+        return $this->hasMany(SubStationary::class, 'case_id', 'case_id');
+    }
 
     protected static function boot()
     {

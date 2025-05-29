@@ -49,6 +49,7 @@ Route::get('hello',function(){
     Route::post('stat-upload',[StationaryController::class,'statUploadData']);
     Route::post('store-upload',[StationaryController::class,'StationaryUpload']);
     Route::get('participants',[StationaryController::class,'StatParticipantData']);
+    Route::get('stationary/{caseId}', [StationaryController::class, 'getStationaryDataByCase']);
     });
 
 
