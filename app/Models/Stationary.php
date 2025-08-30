@@ -28,9 +28,7 @@ class Stationary extends Model
         'hod_name',
         'hod_status',
         'hod_aprvl_date',
-        // 'stationary_name',
-        // 'stationary_status',
-        // 'stationary_aprvl_date',
+        "hod_comments",
         'overall_comment',
         "stores_name"	,	
 		"stores_status"	,	
@@ -57,9 +55,9 @@ class Stationary extends Model
             $raw_uuid = Str::uuid()->toString();                  // e.g., f47ac10b-58cc-4372-a567-0e02b2c3d479
             $uuid_no_hyphens = str_replace('-', '', $raw_uuid);   // e.g., f47ac10b58cc4372a5670e02b2c3d479
             $short_uuid = substr($uuid_no_hyphens, 0, 7);         // e.g., f47ac10
-            $case_id = 'CASE' . strtoupper($short_uuid);          // e.g., CASEF47AC10
+            $case_id = 'STAT' . strtoupper($short_uuid);          // e.g., CASEF47AC10
         } 
-        while (self::where('case_id', $case_id)->exists());      // Ensure uniqueness
+        while (self::where('case_id',$case_id)->exists());      // Ensure uniqueness
           return $case_id;
     }
 }

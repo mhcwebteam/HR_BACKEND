@@ -17,7 +17,9 @@ class AllApprovals extends Model
          'CUR_STATUS',
          'CUR_USR',
          'PREV_USR',
+         'RAISER',
          'LAST_MODIFIED',
+         "RAISER_DATE",
+          "RECEIVED_DATE"
         ];
-
 }

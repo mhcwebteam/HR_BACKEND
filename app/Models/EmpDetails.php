@@ -14,7 +14,8 @@ class EmpDetails extends Authenticatable implements JWTSubject
 
     public $timestamps = false;           // Disable if not using created_at / updated_at
     public $incrementing = true;
-    protected $keyType = 'int';           // Change to 'string' if primary key is string
+    protected $keyType = 'int';  
+             // Change to 'string' if primary key is string
 
     // JWT: Return the unique identifier (e.g. EMP_ID)
     public function getJWTIdentifier()

@@ -41,10 +41,9 @@ class AuthController extends Controller
 
     // }
 
-
     public function login(Request $request)
     {
-        $credentials = $request->only('username', 'password');
+        $credentials = $request->only('username','password');
         // Get user from DB by username
         // Get user from DB by case-insensitive EMP_ID
         $user = EmpDetails::whereRaw('LOWER(Legacy_Id) = ?', 
@@ -61,15 +60,16 @@ class AuthController extends Controller
             // Password matched (you can return JWT token here)
             $token = JWTAuth::fromUser($user);
             return response()->json(
-            ['token' => $token,
+    [
+            'token' => $token,
             'employee'=>
-                    [ 
-                        "Emp_Id"        => $user->Legacy_Id,
-                        "Employee_Name" => $user->Emp_Name,
-                        "Email"         => $user->Email_Id,
-                        "Is_Employee"   => $user->Is_Employee,
-                        "Emp_Category"=> $user->Emp_Category
-                    ]
+                        [ 
+                           "Emp_Id"        => $user->Legacy_Id,
+                           "Employee_Name" => $user->Emp_Name,
+                           "Email"         => $user->Email_Id,
+                           "Is_Employee"   => $user->Is_Employee,
+                           "Emp_Category"  => $user->Emp_Category
+                        ]
                 ]
             );
         }

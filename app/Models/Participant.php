@@ -17,7 +17,9 @@ class Participant extends Model
                 'ACTION_STATUS',
                 "RAISER",
                 "TASK_COUNT",
-                "CURRENT_USER"
+                "CURRENT_USER",
+                 "RAISER_DATE",
+                 "RECEIVED_DATE"
              ];
 
 }

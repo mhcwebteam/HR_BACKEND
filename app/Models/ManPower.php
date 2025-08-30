@@ -1,26 +1,22 @@
 <?php
-
 namespace App\Models;
-
 use Illuminate\Database\Eloquent\Model;
-
 class ManPower extends Model
 {
-    //
     protected $table="manpower_requests";
     protected $primaryKey="SNO";
-    protected $fillable = [
+    protected $fillable = 
+    [
         'SNO',
         'CASEID',
         'CHILD_CASEID',
         'RAISER',
+        'MANPOWER_DESG',
         'PLANT',
-        'RAISER_DATE',
         'R_DT',
         'REQ_FOR',
         'REQ_MAIL',
         'DEPT',
-        'MANPOWER_DESG',
         'NUM_REQUIRE',
         'POSITION',
         'REQUIRE_BY_DATE',
@@ -42,19 +38,20 @@ class ManPower extends Model
         'FUNC_HEAD_MAIL',
         'GM_NAME',
         'GM_STATUS',
+        'RAISER_DATE',
         'GM_DATE',
+        'PRJ_DATE',
+        'FUNC_DATE',
+        'SP_DATE',
+        'EVC_DATE',
         'PRJ_NAME',
         'PRJ_STATUS',
         'FUNC_STATUS',
         'SP_STATUS',
         'EVC_STATUS',
-        'PRJ_DATE',
         'FUNC_NAME',
-        'FUNC_DATE',
         'SP_NAME',
-        'SP_DATE',
         'EVC_NAME',
-        'EVC_DATE',
         'CUR_USR',
         'CUR_STATUS',
         'CUR_TASK',
@@ -74,9 +71,13 @@ class ManPower extends Model
         'HO_HOD_STATUS',
         'HO_HOD_REM',
         'DEL',
-        'LST_UPDT_DT'
+        'LST_UPDT_DT',
+        "Wip_Date"  ,
+        "updated_date",  
+        "Joining_Date" ,
+        "Reverted_Date",
+        "Transfer_Date",
     ];
-    
 public $timestamps=false;    
 
 }
