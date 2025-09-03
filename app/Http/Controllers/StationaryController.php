@@ -200,7 +200,9 @@ class StationaryController extends Controller
                     "SubStationary_data" => $SubStationaryData
                 ]
             );
-        } catch (\Exception $e) {
+        } 
+        catch (\Exception $e) 
+        {
             return response()->json(["status" => 500,"message"=>"Internal Server Error", "Fail" => "Fail"]);
         }
     }
@@ -229,22 +231,30 @@ class StationaryController extends Controller
                     $unselectedSubStat->hod_comments = $unselect['hod_comments'] ?? "";
                     $unselectedSubStat->sub_status = "Reject";
 
-                    if (!$unselectedSubStat->save()) {
+                    if (!$unselectedSubStat->save()) 
+                    {
                         \Log::error("❌ Failed to save SubStationary ID: " . $unselectedSubStat->substationary_id);
-                    } else {
+                    } 
+                    else 
+                    {
                         \Log::info("✅ Updated SubStationary ID: " . $unselectedSubStat->substationary_id);
                     }
                 }
             }
-            foreach ($subStat as $sub) {
+            foreach ($subStat as $sub) 
+            {
                 $subStatUpdate = SubStationary::where('substationary_id', $sub['substationary_id'])->first();
-                if ($subStatUpdate) {
+                if ($subStatUpdate) 
+                {
                     $subStatUpdate->Quantity = $sub['Quantity'] ?? "";
                     $subStatUpdate->hod_comments = $sub['hod_comments'] ?? "";
                     $subStatUpdate->sub_status = "Approve";
-                    if (!$subStatUpdate->save()) {
+                    if (!$subStatUpdate->save()) 
+                    {
                         \Log::error("❌ Failed to save SubStationary ID: " . $subStatUpdate->substationary_id);
-                    } else {
+                    } 
+                    else 
+                    {
                         \Log::info("✅ Updated SubStationary ID: " . $subStatUpdate->substationary_id);
                     }
                 }
@@ -310,7 +320,8 @@ class StationaryController extends Controller
             ]);
         } catch (\Exception $e) {
             \Log::error("SubStatApproval Error: " . $e->getMessage());
-            return response()->json([
+            return response()->json(
+            [
                 "status" => 500,
                 "message" => "Internal Server Error",
                 "success" => false
@@ -348,7 +359,6 @@ class StationaryController extends Controller
                     }
                 }
             }
-
             // Update main Stationary approval details only once (outside the loop)
             if ($case_id) 
             {
@@ -437,8 +447,9 @@ class StationaryController extends Controller
                 "message" => "SubStatData updated successfully.",
                 "success" => true
             ]);
-        }
-         catch (\Exception $e) {
+         }
+         catch (\Exception $e) 
+         {
             \Log::error("SubStatReject Error: " . $e->getMessage());
             return response()->json([
                 "status" => 500,
@@ -450,7 +461,8 @@ class StationaryController extends Controller
     /*------------------------------------------------StatStoreApproval--------------------------------------**/
     public function statStoreApproval(Request $request)
     {
-        try {
+        try 
+        {
             $subStoreStat     = $request->input('subStat', []);
             $store_aprvl_data = $request->input('UserData', []);
             if (empty($subStoreStat)) {
@@ -518,7 +530,6 @@ class StationaryController extends Controller
                     \Log::warning("⚠️ Stationary not found for case_id: " . $case_id);
                 }
             }
-
             //------Participats Update--
             $participants =  new Participant();
             $participants->create([
@@ -549,6 +560,7 @@ class StationaryController extends Controller
             return  response()->json(['status' => 500, "message" => "Internal Server Error", "Fail" => $e->getMessage()]);
         }
     }
+
     //-----------------------------------Combined--Stationery--Upload--------------------------------------------------------//
     public function combinedStationaryUpload(Request $request)
     {
@@ -658,7 +670,6 @@ class StationaryController extends Controller
             ], 500);
         }
     }
-
     public function getStationaryDataByCase($caseId,$ProcessName)
     {
         $formattedData = null;
@@ -670,10 +681,10 @@ class StationaryController extends Controller
                 ->where('case_id', $caseId)
                 ->first(); 
                  $statFlowData = [
-                'case_id'    => $stationaryData->case_id,
-                'name' => $stationaryData->name,
-                'email' => $stationaryData->email,
-                'emp_id' => $stationaryData->emp_id,
+                'case_id'      => $stationaryData->case_id,
+                'name'         => $stationaryData->name,
+                'email'        => $stationaryData->email,
+                'emp_id'       => $stationaryData->emp_id,
                 'department' => $stationaryData->department,
                 'request_for' => $stationaryData->request_for,
                 'raiser_date' => $stationaryData->raiser_date,

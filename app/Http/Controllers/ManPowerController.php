@@ -130,7 +130,6 @@ class ManPowerController extends Controller
             'designations' => $designations??null
         ]);
     }
-
     public function manPowerStore( Request $request)
     {
          $cur_usr = '';
@@ -177,10 +176,9 @@ class ManPowerController extends Controller
             foreach($request->jobDetails as $job)
             {
                 \Log::info("requestData:".json_encode($job));
-
                     $manPower               = new ManPower();
-                    $manPower->PLANT        =  $request['loc'];
-                    $manPower->RAISER       =  Auth::user()->Emp_Name;
+                    $manPower->PLANT        = $request['loc'];
+                    $manPower->RAISER       = Auth::user()->Emp_Name;
                     $manPower->Replacing_Emp= $request['replaced_emp'];
                     $manPower->CASEID =       $request['caseid'];
                     $manPower->RAISER_DATE =  $request['tdate'];
@@ -231,8 +229,8 @@ class ManPowerController extends Controller
                     "ACTION_UID"    =>  Auth::user()->Emp_Name,
                     "ACTION_STATUS" => "TO_DO",
                     "RAISER"        =>  $manPower->RAISER,
-                    "CURRENT_USER"  => $cur_usr,
-                    "TASK_COUNT"    => 1
+                    "CURRENT_USER"  =>  $cur_usr,
+                    "TASK_COUNT"    =>  1
                 ]);
                 }
         }
@@ -383,11 +381,14 @@ class ManPowerController extends Controller
                 }
                 else
                 {
+                    $plantCode = substr($request->loc, 0, 4);
                     $usersData = DB::table('pmt_MANPOWER_PLANT_USERS')
-                       ->where('PLANT', $request->loc)
+                       ->where('PLANT', $plantCode)
                        ->first();
                         $SP_USR = $usersData->SP_USR ?? null;
                         $cur_user = $SP_USR;
+                        \Log::info('loc-'.$plantCode);
+                        \Log::info('cur_user-'.$cur_user);
                         if( $SP_USR=='jsrao')
                         {
                             $cur_task = 'DIRECTOR';
@@ -431,7 +432,7 @@ class ManPowerController extends Controller
                   "CASEID"        =>  $case_id,
                   "PROCESSNAME"   =>  "Manpower",
                   "TASK_NAME"     =>  $cur_task,
-                   "RAISER_DATE"  =>    $mp->RAISER_DATE,
+                   "RAISER_DATE"  =>   $mp->RAISER_DATE,
                    "RECEIVED_DATE"=>  $mp->GM_DATE,
                   "ACTION_UID"    =>  Auth::user()->Emp_Name,
                   "ACTION_STATUS" => "TO_DO",
@@ -685,14 +686,14 @@ class ManPowerController extends Controller
             ->where('CASEID', $case_id)
              ->orderBy('TASK_COUNT', 'desc')
             ->first();
-            $TASK_COUNT   = $old_tas_count ? $old_tas_count->TASK_COUNT + 1 : '';
+            $TASK_COUNT   =  $old_tas_count ? $old_tas_count->TASK_COUNT + 1 : '';
             $participants =  new Participant();
             $participants->create([
                   "CASEID"        =>  $case_id,
                   "PROCESSNAME"   =>  "Manpower",
                   "TASK_NAME"     =>  $cur_task,
-                   "RAISER_DATE"  =>  $mp->RAISER_DATE,
-                   "RECEIVED_DATE"=>  $mp->PRJ_DATE,
+                  "RAISER_DATE"   =>  $mp->RAISER_DATE,
+                  "RECEIVED_DATE" =>  $mp->PRJ_DATE,
                   "ACTION_UID"    =>  Auth::user()->Emp_Name,
                   "ACTION_STATUS" =>  "TO_DO",
                   "RAISER"        =>  $mp->RAISER,
@@ -731,14 +732,14 @@ class ManPowerController extends Controller
             DB::table('ALL_APPROVALS')
                 ->where('CASEID', $case_id)
                 ->update([
-                    'CUR_TASK' => $cur_task,
+                    'CUR_TASK'        => $cur_task,
                     'CUR_STATUS'      => $cur_status,
-                    "RAISER_DATE"=>    $mp->RAISER_DATE,
-                    "RECEIVED_DATE"=>  $mp->PRJ_DATE,
-                    "RAISER"        =>   $mp->RAISER,
-                    'CUR_USR'     => $cur_user,
-                    'LAST_MODIFIED' => \Carbon\Carbon::now()->format('Y-m-d H:i:s'),
-                    'PREV_USR'   => Auth::user()->Emp_Name,
+                    "RAISER_DATE"     => $mp->RAISER_DATE,
+                    "RECEIVED_DATE"   => $mp->PRJ_DATE,
+                    "RAISER"          => $mp->RAISER,
+                    'CUR_USR'         => $cur_user,
+                    'LAST_MODIFIED'   => \Carbon\Carbon::now()->format('Y-m-d H:i:s'),
+                    'PREV_USR'        => Auth::user()->Emp_Name,
             ]);
             //Particpants table here-------
              $old_tas_count = DB::table('participates')
@@ -752,12 +753,12 @@ class ManPowerController extends Controller
                   "PROCESSNAME"   =>  "Manpower",
                   "TASK_NAME"     =>  $cur_task,
                   "ACTION_UID"    =>  Auth::user()->Emp_Name,
-                  "ACTION_STATUS" => "COMPLETED",
-                  "RAISER_DATE"   =>    $mp->RAISER_DATE,
+                  "ACTION_STATUS" =>  "COMPLETED",
+                  "RAISER_DATE"   =>  $mp->RAISER_DATE,
                   "RECEIVED_DATE" =>  $mp->PRJ_DATE,
                   "RAISER"        =>  $mp->RAISER,
-                  "CURRENT_USER"  => $cur_user,
-                  "TASK_COUNT"    => $TASK_COUNT
+                  "CURRENT_USER"  =>  $cur_user,
+                  "TASK_COUNT"    =>  $TASK_COUNT
             ]);
             return response()->json([
                 'message' => 'Approval was not YES; no further action taken.',
@@ -792,26 +793,26 @@ class ManPowerController extends Controller
                     'CUR_TASK'       => $cur_task,
                     'CUR_STATUS'     => $cur_status,
                     'CUR_USR'        => $cur_user,
-                     "RAISER"        =>   $mp->RAISER,
+                    "RAISER"         => $mp->RAISER,
                     'LAST_MODIFIED'  => \Carbon\Carbon::now()->format('Y-m-d H:i:s'),
                     'PREV_USR'       => Auth::user()->Emp_Name,
                 ]);
                     //Particpants table here
              $old_tas_count = DB::table('participates')
-            ->where('CASEID', $case_id)
+             ->where('CASEID', $case_id)
              ->orderBy('TASK_COUNT', 'desc')
-            ->first();
+             ->first();
             $TASK_COUNT = $old_tas_count ? $old_tas_count->TASK_COUNT + 1 : '';
             $participants =  new Participant();
             $participants->create([
                   "CASEID"        =>  $case_id,
-                  "PROCESSNAME"   =>  "Manpower" ,
+                  "PROCESSNAME"   =>  "Manpower",
                   "TASK_NAME"     =>  $cur_task,
                   "ACTION_UID"    =>  Auth::user()->Emp_Name,
-                  "ACTION_STATUS" => "TO_DO",
+                  "ACTION_STATUS" =>  "TO_DO",
                   "RAISER"        =>  $mp->RAISER,
-                  "CURRENT_USER"  => $cur_user,
-                  "TASK_COUNT"    => $TASK_COUNT
+                  "CURRENT_USER"  =>  $cur_user,
+                  "TASK_COUNT"    =>  $TASK_COUNT
             ]);
             return response()->json([
                 'message' => 'Approval was not YES; no further action taken.',
@@ -866,7 +867,7 @@ class ManPowerController extends Controller
                     'CUR_TASK'        => $cur_tas,
                     'CUR_STATUS'      => 'TO_DO',
                     "RAISER_DATE"     => $mp->RAISER_DATE,
-                     "RECEIVED_DATE"  => $mp->RAISER_DATE,
+                    "RECEIVED_DATE"   => $mp->RAISER_DATE,
                     'CUR_USR'         => $HO_MD_USR,
                     'LAST_MODIFIED'   => \Carbon\Carbon::now()->format('Y-m-d H:i:s'),
                     'PREV_USR'        => Auth::user()->Emp_Name,
@@ -1233,15 +1234,16 @@ class ManPowerController extends Controller
         }
     }
     public function manpowerCloseStatus(Request $request){
-        try
-        {
+    try
+      {
          DB::table('ALL_APPROVALS')
                 ->where('CASEID', $request->case_id)
                 ->update([
                     'CUR_TASK'        =>  "Raiser",
                     'CUR_STATUS'      =>  "CLOSED"
                 ]);
-        }catch(\Exception $e)
+        }
+        catch(\Exception $e)
         {
             return response()->json(["status"=>500,"message"=>"Internal Server Error",'error'=>$e->getMessage()]);
         }
@@ -1253,7 +1255,8 @@ public function mrfUploadDataUpdate(Request $request)
     try 
     {
         $manPowerUploadUpdate = ManPowerUpload::where('mrf_id', $request->mrf_id)->first();
-        if (!$manPowerUploadUpdate) {
+        if (!$manPowerUploadUpdate) 
+        {
             return response()->json([
                 "status" => 404,
                 "message" => "MRF record not found"
@@ -1281,7 +1284,6 @@ public function mrfUploadDataUpdate(Request $request)
         ]);
     }
 }
-
 //------------------------------------OverallMrfStatusData Here-----------------------------------------
 public function overallMrfStatusCount(Request $request)
 {
@@ -1322,53 +1324,67 @@ public function overallMrfStatusCount(Request $request)
     {
         return response()->json(["status"=>500,"error"=>"Internal Server Error","message"=>$e->getMessage()]);
     }
+
 }
+private function diffInRoundedDays(?Carbon $start, ?Carbon $end): ?int
+{
+    if (!$start || !$end) {
+        return null;
+    }
+    // If both dates are the same calendar day → return 0
+    if ($start->isSameDay($end)) {
+        return 0;
+    }
+    // Round to nearest day
+    $seconds = abs($end->diffInSeconds($start, false));
+    return (int) round($seconds / 86400);
+}
+
+
+
 public function agingAnalaysisAprlvs(Request $request)
 {
-    try 
-    {
+try 
+ {
     $records = DB::table('manpower_requests')->get();
     $grouped = $records->groupBy('PLANT')->map(function ($items, $plant) 
     {
      $children = $items->map(function ($row) 
      {
-        $dates = 
-        [
-            'RAISER_DATE' => $row->RAISER_DATE ? strtotime($row->RAISER_DATE)  : null,
-            'GM_DATE'     => $row->GM_DATE     ? strtotime($row->GM_DATE)      : null,
-            'PRJ_DATE'    => $row->PRJ_DATE    ? strtotime($row->PRJ_DATE)     : null,
-            'FUNC_DATE'   => $row->FUNC_DATE   ? strtotime($row->FUNC_DATE)    : null,
-            'SP_DATE'     => $row->SP_DATE     ? strtotime($row->SP_DATE)      : null,
-            'EVC_DATE'    => $row->EVC_DATE    ? strtotime($row->EVC_DATE)     : null,
-            'HO_HOD_DATE' => $row->HO_HOD_DATE ? strtotime($row->HO_HOD_DATE)  : null,
-        ];
-        $delays = [];
-        if ($dates['HO_HOD_DATE']) 
-        {
-            $delays['RAISER_to_HO_HOD'] = ceil(($dates['HO_HOD_DATE'] - $dates['RAISER_DATE']) / 86400);
-            $delays['HO_HOD_to_EVC']    = $dates['EVC_DATE'] ? ceil(($dates['EVC_DATE'] - $dates['HO_HOD_DATE']) / 86400) : null;
-        } 
-        elseif ($dates['FUNC_DATE']) 
-        {
-            $delays['RAISER_to_GM']  = ceil(($dates['GM_DATE'] - $dates['RAISER_DATE']) / 86400);
-            $delays['GM_to_PRJ']     = ceil(($dates['PRJ_DATE'] - $dates['GM_DATE']) / 86400);
-            $delays['PRJ_to_FUNC']   = ceil(($dates['FUNC_DATE'] - $dates['PRJ_DATE']) / 86400);
-            $delays['FUNC_to_SP']    = ceil(($dates['SP_DATE'] - $dates['FUNC_DATE']) / 86400);
-            $delays['SP_to_EVC']     = $dates['EVC_DATE'] ? ceil(($dates['EVC_DATE'] - $dates['SP_DATE']) / 86400) : null;
-        } 
-        else 
-        {
-            $delays['RAISER_to_GM']  = ceil(($dates['GM_DATE'] - $dates['RAISER_DATE']) / 86400);
-            $delays['GM_to_PRJ']     = ceil(($dates['PRJ_DATE'] - $dates['GM_DATE']) / 86400);
-            $delays['PRJ_to_SP']     = ceil(($dates['SP_DATE'] - $dates['PRJ_DATE']) / 86400);
-            $delays['SP_to_EVC']     = $dates['EVC_DATE'] ? ceil(($dates['EVC_DATE'] - $dates['SP_DATE']) / 86400) : null;
-        }
+        $dates = [
+    'RAISER_DATE' => $row->RAISER_DATE ? Carbon::parse($row->RAISER_DATE) : null,
+    'GM_DATE'     => $row->GM_DATE     ? Carbon::parse($row->GM_DATE)     : null,
+    'PRJ_DATE'    => $row->PRJ_DATE    ? Carbon::parse($row->PRJ_DATE)    : null,
+    'FUNC_DATE'   => $row->FUNC_DATE   ? Carbon::parse($row->FUNC_DATE)   : null,
+    'SP_DATE'     => $row->SP_DATE     ? Carbon::parse($row->SP_DATE)     : null,
+    'EVC_DATE'    => $row->EVC_DATE    ? Carbon::parse($row->EVC_DATE)    : null,
+    'HO_HOD_DATE' => $row->HO_HOD_DATE ? Carbon::parse($row->HO_HOD_DATE) : null,
+];
+
+$delays = [];
+
+if ($dates['HO_HOD_DATE']) {
+    $delays['RAISER_to_HO_HOD'] = $this->diffInRoundedDays($dates['RAISER_DATE'], $dates['HO_HOD_DATE']);
+    $delays['HO_HOD_to_EVC']    = $this->diffInRoundedDays($dates['HO_HOD_DATE'], $dates['EVC_DATE']);
+} elseif ($dates['FUNC_DATE']) {
+    $delays['RAISER_to_GM']  = $this->diffInRoundedDays($dates['RAISER_DATE'], $dates['GM_DATE']);
+    $delays['GM_to_PRJ']     = $this->diffInRoundedDays($dates['GM_DATE'], $dates['PRJ_DATE']);
+    $delays['PRJ_to_FUNC']   = $this->diffInRoundedDays($dates['PRJ_DATE'], $dates['FUNC_DATE']);
+    $delays['FUNC_to_SP']    = $this->diffInRoundedDays($dates['FUNC_DATE'], $dates['SP_DATE']);
+    $delays['SP_to_EVC']     = $this->diffInRoundedDays($dates['SP_DATE'], $dates['EVC_DATE']);
+} else {
+    $delays['RAISER_to_GM']  = $this->diffInRoundedDays($dates['RAISER_DATE'], $dates['GM_DATE']);
+    $delays['GM_to_PRJ']     = $this->diffInRoundedDays($dates['GM_DATE'], $dates['PRJ_DATE']);
+    $delays['PRJ_to_SP']     = $this->diffInRoundedDays($dates['PRJ_DATE'], $dates['SP_DATE']);
+    $delays['SP_to_EVC']     = $this->diffInRoundedDays($dates['SP_DATE'], $dates['EVC_DATE']);
+}
+
         //Average per child
         $valid = array_filter($delays, fn($v) => $v !== null);
         $delays['Average'] = count($valid) ? ceil(array_sum($valid) / count($valid)) : null;
         return 
         [
-             "CASEID"         => $row->CASEID ,
+             "CASEID"       => $row->CASEID ,
             'CHILD_CASEID'  => $row->CHILD_CASEID,
             'RAISER'        => $row->RAISER,
             'MANPOWER_DESG' => $row->MANPOWER_DESG,
@@ -1380,14 +1396,14 @@ public function agingAnalaysisAprlvs(Request $request)
     $plantDelays = [];
     if ($children->count()) 
     {
-        $allDelayKeys = array_keys($children[0]['delays']);
-        foreach ($allDelayKeys as $key) 
-        {
-            $values = $children->map(fn($c) => $c['delays'][$key])
-                               ->filter(fn($v) => $v !== null)
-                               ->toArray();
-            $plantDelays[$key] = count($values) ? ceil(array_sum($values) / count($values)) : null;
-        }
+        $allDelayKeys = $children->flatMap(fn($c) => array_keys($c['delays']))->unique();
+            foreach ($allDelayKeys as $key) 
+                {
+                $values = $children->map(fn($c) => $c['delays'][$key] ?? null)
+                                ->filter(fn($v) => $v !== null)
+                                ->toArray();
+                $plantDelays[$key] = count($values) ? ceil(array_sum($values) / count($values)) : null;
+            }
     }
     return [
        'PLANT'                => $plant,
@@ -1410,6 +1426,8 @@ public function agingAnalaysisAprlvs(Request $request)
         ]);
     }
 }
+
+
 public function agingHRAnalaysis()
 {
     try 
@@ -1496,7 +1514,7 @@ public function filterOverallCountDesgni(Request $request)
             $join->on('mpu.Plant_code', '=', 'mr.PLANT')
                 ->on('mpu.Designation', '=', 'mr.MANPOWER_DESG');
         })
-    ->select(
+       ->select(
         'mpu.Plant_code',
                  'mpu.Designation',
                  DB::raw("COUNT(*) as Designation_count"),   
@@ -1525,7 +1543,6 @@ public function filterOverallCountDesgni(Request $request)
         )
     ) as Total
 ")
-
         )->groupBy(
             'mpu.Plant_code',
             'mpu.Designation',
