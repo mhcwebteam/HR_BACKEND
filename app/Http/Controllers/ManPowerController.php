@@ -46,32 +46,34 @@ class ManPowerController extends Controller
         try
         {
             $spreadsheet = IOFactory::load($file->getRealPath());
-            $sheet = $spreadsheet->getActiveSheet();
-            $rows = $sheet->toArray();
-            $insertData = [];
-            foreach ($rows as $index => $row)
-            {
-                // Skip empty and header rows
-                if ($index < 4) continue;
-                // Designation is in column 3 (index 3)
-                if (empty($row[3])) continue;
-                $insertData[] =
-                [
-                    'Plant_code'         => $request->PlantCode ?? '',
-                    'Designation'        => $row[3] ?? '',
-                    'Department'         => '', // You can map from column 4 if needed
-                    'Total_Requirement'  => $row[5] ?? '',
-                    'Availability'       => $row[6] ?? '',
-                    'Actual_Requirement' => $row[7] ?? '',
+            $sheet       = $spreadsheet->getActiveSheet();
+            $rows        = $sheet->toArray();
+            $insertData  = [];
+                foreach ($rows as $index => $row) 
+                {
+                    if ($index < 4) continue;
+                    if (empty($row[3])) continue;
+                    $insertData[] = [
+                    'Plant_code'         => trim((string) $request->PlantCode ?? ''),
+                    'Designation'        => trim((string) $row[3] ?? ''),
+                    'Department'         => trim((string) $row[4] ?? ""), // replace if mapping later
+                    'Total_Requirement'  => (int) ($row[5] ?? 0),
+                    'Availability'       => (int) ($row[6] ?? 0),
+                    'Actual_Requirement' => (int) ($row[7] ?? 0),
                     "Emp_Name"           => Auth::user()->Emp_Name,
-                ];
-            }
-            if (empty($insertData))
-            {
-                return response()->json(['error' => 'No valid data found in the file.'], 400);
-            }
-            DB::table('man_power_upload')->insert($insertData);
-            return response()->json(['message' => 'Upload successful']);
+                  ];
+                }
+                if (empty($insertData)) 
+                {
+                    return response()->json(['error' => 'No valid data found in the file.'], 400);
+                }
+                // UPSERT in one query
+                DB::table('man_power_upload')->upsert(
+                    $insertData,
+                    ['Plant_code', 'Designation', 'Department'], // Unique keys
+                    ['Total_Requirement', 'Availability', 'Actual_Requirement', 'Emp_Name'] // Columns to update
+                );
+                return response()->json(['message' => 'Upload successful']);
         }
         catch (\Exception $e)
         {
@@ -100,7 +102,7 @@ class ManPowerController extends Controller
     }
     public function getManpowerData($case_id){
         try 
-        {
+       {
         $data = getManpowerData::where('CHILD_CASEID', $case_id)->first();
         if (!$data) 
         {
@@ -218,13 +220,13 @@ class ManPowerController extends Controller
                     'PREV_USR'       =>        Auth::user()->Emp_Name,//Raiser or Approval One here
                     'LAST_MODIFIED'  =>        \Carbon\Carbon::now()->format('Y-m-d H:i:s'),
                     ]);
-                    //Particpants table here
+                //--------------Particpants table here-------------
                 $participants =  new Participant();
                 $participants->create([
                     "CASEID"        =>  $job['childcaseid'],
                     "PROCESSNAME"   =>  "Manpower",
                     "TASK_NAME"     =>  "Raiser",
-                     "RAISER_DATE"  =>  \Carbon\Carbon::now()->format('Y-m-d H:i:s'),
+                    "RAISER_DATE"  =>  \Carbon\Carbon::now()->format('Y-m-d H:i:s'),
                     "RECEIVED_DATE" =>   \Carbon\Carbon::now()->format('Y-m-d H:i:s'),
                     "ACTION_UID"    =>  Auth::user()->Emp_Name,
                     "ACTION_STATUS" => "TO_DO",
@@ -237,13 +239,12 @@ class ManPowerController extends Controller
         return response()->json
         (
             [
-             "success"=>true,
+            "success"=>true,
              "status"=> 201,
              "message"=>"ManPower Created Successfully"
             ]
         );
     }
-
     public function ManpowerGMData(Request $request, $case_id)
     {
         // Validate incoming data
@@ -264,11 +265,13 @@ class ManPowerController extends Controller
             //Find the record
             $mp = getManpowerData::where('CHILD_CASEID', $case_id)->firstOrFail();
             //Update approval status + remarks
-            $mp->GM_STATUS = $data['approve'];
-            $mp->GM_DATE = \Carbon\Carbon::now()->format('Y-m-d H:i:s');
-            $mp->GM_REM = $request->input('gmremarks');
+            $mp->GM_NAME     =  Auth::user()->Emp_Name;
+            $mp->GM_STATUS   = $data['approve'];
+            $mp->GM_DATE     = \Carbon\Carbon::now()->format('Y-m-d H:i:s');
+            $mp->GM_REM    = $request->input('gmremarks');
             $mp->CUR_TASK = 'PRJ_HEAD';
-            $mp->CUR_USR = $PRJ_USR;
+            $mp->CUR_USR  = $PRJ_USR;
+            $mp->PRJ_NAME = $PRJ_USR;
             $mp->CUR_STATUS = 'TO_DO';
             $mp->save();
             // ✅ Update ALL_APPROVALS
@@ -277,14 +280,14 @@ class ManPowerController extends Controller
                 ->update([
                      'CUR_TASK'        => 'PRJ_HEAD',
                      'CUR_STATUS'      => 'TO_DO',
-                     "RAISER_DATE"     =>    $mp->RAISER_DATE,
-                     "RAISER"          =>    $mp->RAISER,
-                     "RECEIVED_DATE"   =>   $mp->RAISER_DATE,
-                     'CUR_USR'         =>   $PRJ_USR,
+                     "RAISER_DATE"     =>  $mp->RAISER_DATE,
+                     "RAISER"          =>  $mp->RAISER,
+                     "RECEIVED_DATE"   =>  $mp->RAISER_DATE,
                      'LAST_MODIFIED'   =>   \Carbon\Carbon::now()->format('Y-m-d H:i:s'),
+                     'CUR_USR'         =>   $PRJ_USR,
                      'PREV_USR'        =>   Auth::user()->Emp_Name,
                 ]);
-                    //Particpants table here
+                //Particpants table here
              $old_tas_count = DB::table('participates')
             ->where('CASEID', $case_id)
              ->orderBy('TASK_COUNT', 'desc')
@@ -295,8 +298,8 @@ class ManPowerController extends Controller
                   "CASEID"        =>  $case_id,
                   "PROCESSNAME"   =>  "Manpower",
                   "TASK_NAME"     =>  "PRJ_HEAD",
-                   "RAISER_DATE"  =>   $mp->RAISER_DATE,
-                   "RECEIVED_DATE"=>   $mp->RAISER_DATE,
+                  "RAISER_DATE"  =>   $mp->RAISER_DATE,
+                  "RECEIVED_DATE"=>   $mp->RAISER_DATE,
                   "ACTION_UID"    =>   Auth::user()->Emp_Name,
                   "ACTION_STATUS" =>   "TO_DO",
                   "RAISER"        =>   $mp->RAISER,
@@ -304,7 +307,7 @@ class ManPowerController extends Controller
                   "TASK_COUNT"    =>   $TASK_COUNT
             ]);
             return response()->json([
-                'message' => 'Approval submitted successfully.',
+                'message' => 'Approval Submitted Successfully.',
                 'case_id' => $case_id,
             ], 200);
         }
@@ -313,19 +316,20 @@ class ManPowerController extends Controller
              // Find the record
             $mp = getManpowerData::where('CHILD_CASEID', $case_id)->firstOrFail();
             // Update approval status + remarks
+            $mp->GM_NAME     =  Auth::user()->Emp_Name;
             $mp->GM_STATUS  = $data['approve'];
             $mp->GM_DATE    = \Carbon\Carbon::now()->format('Y-m-d H:i:s');
             $mp->GM_REM     = $request->input('gmremarks');
             $mp->CUR_TASK   = 'GM';
             $mp->CUR_USR    = Auth::user()->Emp_Name;
-            $mp->CUR_STATUS = 'COMPLETED';
+            $mp->CUR_STATUS = 'Reject';
             $mp->save();
             // ✅ Update ALL_APPROVALS
             DB::table('ALL_APPROVALS')
                 ->where('CASEID', $case_id)
                 ->update([
                     'CUR_TASK'      => 'GM',
-                    'CUR_STATUS'    => 'COMPLETED',
+                    'CUR_STATUS'    => 'Reject',
                      "RAISER"       =>  $mp->RAISER,
                     "RAISER_DATE"   =>  $mp->RAISER_DATE,
                     "RECEIVED_DATE" =>  $mp->RAISER_DATE,
@@ -344,13 +348,13 @@ class ManPowerController extends Controller
                   "CASEID"        =>  $case_id,
                   "PROCESSNAME"   =>  "Manpower",
                   "TASK_NAME"     =>  "GM",
-                   "RAISER_DATE"  => $mp->RAISER_DATE,
-                   "RECEIVED_DATE"=>  $mp->RAISER_DATE,
+                  "RAISER_DATE"   =>  $mp->RAISER_DATE,
+                  "RECEIVED_DATE" =>  $mp->RAISER_DATE,
                   "ACTION_UID"    =>  Auth::user()->Emp_Name,
-                  "ACTION_STATUS" => "COMPLETED",
+                  "ACTION_STATUS" => "Reject",
                   "RAISER"        =>  $mp->RAISER,
-                  "CURRENT_USER"  => Auth::user()->Emp_Name,
-                  "TASK_COUNT"    => 2
+                  "CURRENT_USER"  =>  Auth::user()->Emp_Name,
+                  "TASK_COUNT"    =>  2
             ]);
             return response()->json(
             [
@@ -398,9 +402,10 @@ class ManPowerController extends Controller
                             $cur_task = 'SP';
                         }   
                 }
-            // Find the record
+           // Find the record
             $mp = getManpowerData::where('CHILD_CASEID', $case_id)->firstOrFail();
             // Update approval status + remarks
+            $mp->PRJ_NAME     =  Auth::user()->Emp_Name;
             $mp->PRJ_STATUS = $data['approve'];
             $mp->PRJ_DATE = \Carbon\Carbon::now()->format('Y-m-d H:i:s');
             $mp->PRJ_REM = $request->input('prj_headremarks');
@@ -416,8 +421,8 @@ class ManPowerController extends Controller
                     'CUR_STATUS'      => 'TO_DO',
                     'CUR_USR'         => $cur_user,
                     "RAISER_DATE"     => $mp->RAISER_DATE,
-                    "RECEIVED_DATE"  => $mp->GM_DATE,
-                    "RAISER"        => $mp->RAISER,
+                    "RECEIVED_DATE"   =>   $mp->GM_DATE,
+                    "RAISER"          =>    $mp->RAISER,
                     'LAST_MODIFIED'   => \Carbon\Carbon::now()->format('Y-m-d H:i:s'),
                     'PREV_USR'        => Auth::user()->Emp_Name,
                 ]);
@@ -432,13 +437,13 @@ class ManPowerController extends Controller
                   "CASEID"        =>  $case_id,
                   "PROCESSNAME"   =>  "Manpower",
                   "TASK_NAME"     =>  $cur_task,
-                   "RAISER_DATE"  =>   $mp->RAISER_DATE,
-                   "RECEIVED_DATE"=>  $mp->GM_DATE,
+                  "RAISER_DATE"  =>  $mp->RAISER_DATE,
+                  "RECEIVED_DATE"=>  $mp->GM_DATE,
                   "ACTION_UID"    =>  Auth::user()->Emp_Name,
                   "ACTION_STATUS" => "TO_DO",
                   "RAISER"        =>  $mp->RAISER,
-                  "CURRENT_USER"  => $cur_user,
-                  "TASK_COUNT"    => $TASK_COUNT
+                  "CURRENT_USER"  =>  $cur_user,
+                  "TASK_COUNT"    =>  $TASK_COUNT
             ]);
             return response()->json([
                 'message' => 'Approval submitted successfully.',
@@ -450,25 +455,26 @@ class ManPowerController extends Controller
              //------======= Find the record---------------------------
             $mp = getManpowerData::where('CHILD_CASEID', $case_id)->firstOrFail();
             // Update approval status + remarks
-            $mp->GM_STATUS = $data['approve'];
-            $mp->GM_DATE = \Carbon\Carbon::now()->format('Y-m-d H:i:s');
-            $mp->GM_REM = $request->input('prj_headremarks');
-            $mp->CUR_TASK = 'PRJ_HEAD';
+            $mp->PRJ_NAME     =  Auth::user()->Emp_Name;
+            $mp->PRJ_STATUS = $data['approve'];
+            $mp->PRJ_DATE  = \Carbon\Carbon::now()->format('Y-m-d H:i:s');
+            $mp->PRJ_REM   = $request->input('prj_headremarks');
+            $mp->CUR_TASK  = 'PRJ_HEAD';
             $mp->CUR_USR = Auth::user()->Emp_Name;
-            $mp->CUR_STATUS = 'COMPLETED';
+            $mp->CUR_STATUS = 'Reject';
             $mp->save();
             // ✅ Update ALL_APPROVALS
                 DB::table('ALL_APPROVALS')
                     ->where('CASEID', $case_id)
                     ->update([
-                        'CUR_TASK'       => 'PRJ_HEAD',
-                        'CUR_STATUS'      => 'COMPLETED', 
-                        "RAISER_DATE"=>    $mp->RAISER_DATE,
-                        "RECEIVED_DATE"=>  $mp->GM_DATE,
-                         "RAISER"        =>   $mp->RAISER,
-                        'CUR_USR'     => Auth::user()->Emp_Name,
-                        'LAST_MODIFIED' => \Carbon\Carbon::now()->format('Y-m-d H:i:s'),
-                        'PREV_USR'   => Auth::user()->Emp_Name,
+                        'CUR_TASK'         => 'PRJ_HEAD',
+                        'CUR_STATUS'       => 'Reject', 
+                        "RAISER_DATE"      =>  $mp->RAISER_DATE,
+                        "RECEIVED_DATE"    =>  $mp->GM_DATE,
+                        "RAISER"           =>   $mp->RAISER,
+                        'CUR_USR'          =>  Auth::user()->Emp_Name,
+                        'LAST_MODIFIED'    =>  \Carbon\Carbon::now()->format('Y-m-d H:i:s'),
+                        'PREV_USR'         =>  Auth::user()->Emp_Name,
                     ]);
                     //Particpants table here
              $old_tas_count = DB::table('participates')
@@ -484,7 +490,7 @@ class ManPowerController extends Controller
                   "RAISER_DATE"=>    $mp->RAISER_DATE,
                   "RECEIVED_DATE"=>  $mp->GM_DATE,
                   "ACTION_UID"    =>  Auth::user()->Emp_Name,
-                  "ACTION_STATUS" => "COMPLETED",
+                  "ACTION_STATUS" => "Reject",
                   "RAISER"        =>  $mp->RAISER,
                   "CURRENT_USER"  =>  Auth::user()->Emp_Name,
                   "TASK_COUNT"    =>  $TASK_COUNT
@@ -504,7 +510,8 @@ class ManPowerController extends Controller
             'cur_tas'   => 'required|string',
             'department'=> 'required|string', // ✅ Needed for your logic
         ]);
-        if ($data['approve'] === 'Approve') {
+        if ($data['approve'] === 'Approve') 
+        {
             $cur_tas = $data['cur_tas'];
             // $dept_data = DB::table('pmt_MANPOWER_FIELDS')
             //         ->where('DEPT', $request->department)
@@ -517,7 +524,6 @@ class ManPowerController extends Controller
             //     }
             //     else
             //     {
-            
             $loc = (string) $request->loc;
             $plant_code = substr($loc, 0, 4);
                     $usersData = DB::table('pmt_MANPOWER_PLANT_USERS')
@@ -537,6 +543,7 @@ class ManPowerController extends Controller
             // Find the record
             $mp = getManpowerData::where('CHILD_CASEID', $case_id)->firstOrFail();
             // Update approval status + remarks
+            $mp->FUNC_NAME     =  Auth::user()->Emp_Name;
             $mp->FUNC_STATUS = $data['approve'];
             $mp->FUNC_DATE = \Carbon\Carbon::now()->format('Y-m-d H:i:s');
             $mp->FUNC_REM = $request->input('func_headremarks');
@@ -548,14 +555,14 @@ class ManPowerController extends Controller
             DB::table('ALL_APPROVALS')
                 ->where('CASEID', $case_id)
                 ->update([
-                    'CUR_TASK' => $cur_task,
+                    'CUR_TASK'        => $cur_task,
                     'CUR_STATUS'      => 'TO_DO',
-                    'CUR_USR'     => $cur_user,
-                    "RAISER_DATE"=>    $mp->RAISER_DATE,
-                     "RECEIVED_DATE"=>  $mp->PRJ_DATE,
-                      "RAISER"        =>   $mp->RAISER,
-                    'LAST_MODIFIED' => \Carbon\Carbon::now()->format('Y-m-d H:i:s'),
-                    'PREV_USR'   => Auth::user()->Emp_Name,
+                    'CUR_USR'         => $cur_user,
+                    "RAISER_DATE"     => $mp->RAISER_DATE,
+                    "RECEIVED_DATE"  => $mp->PRJ_DATE,
+                    "RAISER"        => $mp->RAISER,
+                    'LAST_MODIFIED'   => \Carbon\Carbon::now()->format('Y-m-d H:i:s'),
+                    'PREV_USR'        => Auth::user()->Emp_Name,
                 ]);
                     //Particpants table here
              $old_tas_count = DB::table('participates')
@@ -584,27 +591,28 @@ class ManPowerController extends Controller
         elseif($data['approve'] === 'Reject')
         {
              //------======= Find the record---------------------------
-            $mp = getManpowerData::where('CHILD_CASEID', $case_id)->firstOrFail();
+           $mp = getManpowerData::where('CHILD_CASEID', $case_id)->firstOrFail();
             // Update approval status + remarks
+            $mp->FUNC_NAME     =  Auth::user()->Emp_Name;
             $mp->FUNC_STATUS = $data['approve'];
             $mp->FUNC_DATE = \Carbon\Carbon::now()->format('Y-m-d H:i:s');
             $mp->FUNC_REM = $request->input('func_headremarks');
             $mp->CUR_TASK = 'FUNC_HEAD';
             $mp->CUR_USR = Auth::user()->Emp_Name;
-            $mp->CUR_STATUS = 'COMPLETED';
+            $mp->CUR_STATUS = 'Reject';
             $mp->save();
             // ✅ Update ALL_APPROVALS
                 DB::table('ALL_APPROVALS')
                     ->where('CASEID', $case_id)
                     ->update([
-                        'CUR_TASK'       => 'FUNC_HEAD',
-                        'CUR_STATUS'      => 'COMPLETED', 
-                        "RAISER_DATE"=>    $mp->RAISER_DATE,
-                        "RECEIVED_DATE"=>  $mp->PRJ_DATE,
+                         'CUR_TASK'       => 'FUNC_HEAD',
+                         'CUR_STATUS'      => 'COMPLETED', 
+                         "RAISER_DATE"=>    $mp->RAISER_DATE,
+                         "RECEIVED_DATE"=>  $mp->PRJ_DATE,
                          "RAISER"        =>   $mp->RAISER,
-                        'CUR_USR'     => Auth::user()->Emp_Name,
-                        'LAST_MODIFIED' => \Carbon\Carbon::now()->format('Y-m-d H:i:s'),
-                        'PREV_USR'   => Auth::user()->Emp_Name,
+                         'CUR_USR'     => Auth::user()->Emp_Name,
+                         'LAST_MODIFIED' => \Carbon\Carbon::now()->format('Y-m-d H:i:s'),
+                         'PREV_USR'   => Auth::user()->Emp_Name,
                     ]);
                     //Particpants table here
              $old_tas_count = DB::table('participates')
@@ -660,7 +668,8 @@ class ManPowerController extends Controller
             }
             // Find the record
             $mp = getManpowerData::where('CHILD_CASEID', $case_id)->firstOrFail();
-            // Update approval status + remarks
+            // Update approval status + remarksremarks
+            $mp->SP_NAME     =  Auth::user()->Emp_Name;
             $mp->SP_STATUS  = $data['approve'];
             $mp->SP_DATE    = \Carbon\Carbon::now()->format('Y-m-d H:i:s');
             $mp->SP_REM     = $request->input('spremarks');
@@ -674,12 +683,12 @@ class ManPowerController extends Controller
                 ->update([
                     'CUR_TASK'        => $cur_task,
                     'CUR_STATUS'      => 'TO_DO',
-                     "RAISER_DATE"    =>    $mp->RAISER_DATE,
+                     "RAISER_DATE"    =>  $mp->RAISER_DATE,
                      "RECEIVED_DATE"  =>  $mp->PRJ_DATE,
                      "RAISER"         =>   $mp->RAISER,
-                    'CUR_USR'         => $cur_user,
-                    'LAST_MODIFIED'   => \Carbon\Carbon::now()->format('Y-m-d H:i:s'),
-                    'PREV_USR'        => Auth::user()->Emp_Name,
+                     'CUR_USR'         => $cur_user,
+                     'LAST_MODIFIED'   => \Carbon\Carbon::now()->format('Y-m-d H:i:s'),
+                     'PREV_USR'        => Auth::user()->Emp_Name,
                 ]);
                     //Particpants table here
              $old_tas_count = DB::table('participates')
@@ -707,20 +716,22 @@ class ManPowerController extends Controller
         }
          // Optional: handle case when NOT approved
          if ($data['approve'] === 'Reject') 
-        {
+         {
             // $cur_tas = $data['cur_tas'];
-            $loc = (string) $request->loc;
+           $loc = (string) $request->loc;
             $plant_code = substr($loc, 0, 4);
             $usersData = DB::table('pmt_MANPOWER_PLANT_USERS')
                     ->where('PLANT', $plant_code)
                     ->first();
             $EVC_USR = $usersData->EVC_USR ?? null;
             $cur_user = Auth::user()->Emp_Name;
-            $cur_status = 'COMPLETED';
+            // $cur_status = 'COMPLETED';
+            $cur_status = 'Reject';
             $cur_task = 'SP';
             // Find the record
             $mp = getManpowerData::where('CHILD_CASEID', $case_id)->firstOrFail();
-            // Update approval status + remarks
+            // Update approval status + remarksremarks
+            $mp->SP_NAME     =  Auth::user()->Emp_Name;
             $mp->SP_STATUS = $data['approve'];
             $mp->SP_DATE = \Carbon\Carbon::now()->format('Y-m-d H:i:s');
             $mp->SP_REM = $request->input('spremarks');
@@ -778,13 +789,14 @@ class ManPowerController extends Controller
             $cur_task   = 'RAISER';
             // Find the record
             $mp = getManpowerData::where('CHILD_CASEID', $case_id)->firstOrFail();
-            // Update approval status + remarks
-            $mp->SP_STATUS = $data['approve'];
-            $mp->SP_DATE = \Carbon\Carbon::now()->format('Y-m-d H:i:s');
-            $mp->SP_REM = $request->input('spremarks');
-            $mp->CUR_TASK = $cur_task;
-            $mp->CUR_USR = $cur_user;
-            $mp->CUR_STATUS = $cur_status;
+            // Update approval status + remarksremarks
+            $mp->SP_NAME     =  Auth::user()->Emp_Name;
+            $mp->SP_STATUS   = $data['approve'];
+            $mp->SP_DATE     = \Carbon\Carbon::now()->format('Y-m-d H:i:s');
+            $mp->SP_REM      = $request->input('spremarks');
+            $mp->CUR_TASK    = $cur_task;
+            $mp->CUR_USR     = $cur_user;
+            $mp->CUR_STATUS  = $cur_status;
             $mp->save();
             // ✅ Update ALL_APPROVALS
             DB::table('ALL_APPROVALS')
@@ -820,7 +832,7 @@ class ManPowerController extends Controller
             ], 200);
         }
     }
-    public function ManpowerHODData(Request $request, $case_id)
+    public function ManpowerHODData(Request $request,$case_id)
     {
         // Validate incoming data
         $data = $request->validate([
@@ -842,7 +854,7 @@ class ManPowerController extends Controller
             {
                 $cur_tas = 'MD';
             } 
-            else if($HO_MD_USR === 'asrao') 
+            else if($HO_MD_USR==='asrao') 
             {
                 $cur_tas = 'CFO';
             } 
@@ -852,7 +864,8 @@ class ManPowerController extends Controller
             }
             // Find the manpower record
             $mp = getManpowerData::where('CHILD_CASEID', $case_id)->firstOrFail();
-            // Update record fields
+            // Update record fieldsremarks
+            $mp->HO_HOD_NAME     =  Auth::user()->Emp_Name;
             $mp->HO_HOD_STATUS   = $data['approve'];
             $mp->HO_HOD_REM      = $request->input('hodremarks');
             $mp->CUR_STATUS      = 'TO_DO'; // 🛠️ Typically, next step is TO_DO
@@ -922,15 +935,17 @@ class ManPowerController extends Controller
             // Find the manpower record
             $mp = getManpowerData::where('CHILD_CASEID', $case_id)->firstOrFail();
             // Update record fields
+            $mp->EVC_NAME     =  Auth::user()->Emp_Name;
             $mp->EVC_STATUS   = $data['approve'];
             $mp->EVC_DATE     = \Carbon\Carbon::now()->format('Y-m-d H:i:s');
             $mp->EVC_REM      = $rem;
             $mp->CUR_STATUS   = 'COMPLETED'; // 🛠️ Typically, next step is TO_DO
-            $mp->CUR_TASK     = $cur_tas;
-            $mp->STATUS       ='COMPLETED';
+            $mp->CUR_TASK     =  $cur_tas;
+            $mp->STATUS       = 'COMPLETED';
             $mp->CUR_USR      = Auth::user()->Emp_Name;
             $mp->EVC_DATE     = \Carbon\Carbon::now()->format('Y-m-d H:i:s');
             $mp->save();
+            \Log::info('SP_HO_DATE'.($mp->SP_DATE) ? $mp->SP_DATE : $mp->HO_HOD_DATE);
              // ✅ Update ALL_APPROVALS
             DB::table('ALL_APPROVALS')
                 ->where('CASEID', $case_id)
@@ -938,17 +953,17 @@ class ManPowerController extends Controller
                     'CUR_TASK'        =>  $cur_tas,
                     'CUR_STATUS'      =>  'COMPLETED',
                     "RAISER_DATE"     =>  $mp->RAISER_DATE,
-                    "RECEIVED_DATE"   =>  $mp->SP_DATE,
-                     "RAISER"         =>  $mp->RAISER,
+                    "RECEIVED_DATE"   =>  ($mp->SP_DATE) ? $mp->SP_DATE : $mp->HO_HOD_DATE,
+                    "RAISER"         =>  $mp->RAISER,
                     'CUR_USR'         =>  Auth::user()->Emp_Name,
                     'LAST_MODIFIED'   =>  \Carbon\Carbon::now()->format('Y-m-d H:i:s'),
-                    // 'PREV_USR'   => Auth::user()->Emp_Name,
+                    //'PREV_USR'   => Auth::user()->Emp_Name,
                 ]);
-                    //Particpants table here
+        //-----------------Particpants table here-----------------//
              $old_tas_count = DB::table('participates')
-            ->where('CASEID', $case_id)
+             ->where('CASEID', $case_id)
              ->orderBy('TASK_COUNT', 'desc')
-            ->first();
+             ->first();
             $TASK_COUNT = $old_tas_count ? $old_tas_count->TASK_COUNT + 1 : '';
             $participants =  new Participant();
             $participants->create([
@@ -958,7 +973,7 @@ class ManPowerController extends Controller
                   "ACTION_UID"    =>  Auth::user()->Emp_Name,
                   "ACTION_STATUS" =>  "COMPLETED",
                   "RAISER_DATE"   =>  $mp->RAISER_DATE,
-                  "RECEIVED_DATE" =>  $mp->SP_DATE,
+                  "RECEIVED_DATE" =>  ($mp->SP_DATE) ? $mp->SP_DATE : $mp->HO_HOD_DATE,
                   "RAISER"        =>  $mp->RAISER,
                   "CURRENT_USER"  =>  Auth::user()->Emp_Name,
                   "TASK_COUNT"    =>  $TASK_COUNT
@@ -972,18 +987,20 @@ class ManPowerController extends Controller
         if ($data['approve'] === 'Reject') 
         {
             // $cur_tas = $data['cur_tas'];
-            $loc = (string) $request->loc;
+            $loc        = (string) $request->loc;
             $plant_code = substr($loc, 0, 4);
-            $usersData = DB::table('pmt_MANPOWER_PLANT_USERS')
+            $usersData  = DB::table('pmt_MANPOWER_PLANT_USERS')
                     ->where('PLANT', $plant_code)
                     ->first();
-            $EVC_USR = $usersData->EVC_USR ?? null;
-            $cur_user = Auth::user()->Emp_Name;
-            $cur_status = 'COMPLETED';
+            $EVC_USR    = $usersData->EVC_USR ?? null;
+            $cur_user   = Auth::user()->Emp_Name;
+            // $cur_status = 'Reject';
+            $cur_status = $data['approve'];
             $cur_task = 'SP';
             // Find the record
             $mp = getManpowerData::where('CHILD_CASEID', $case_id)->firstOrFail();
             // Update approval status + remarks
+            $mp->EVC_NAME   = Auth::user()->Emp_Name;
             $mp->SP_STATUS  = $data['approve'];
             $mp->EVC_DATE   = \Carbon\Carbon::now()->format('Y-m-d H:i:s');
             $mp->SP_REM     = $request->input('spremarks');
@@ -992,7 +1009,7 @@ class ManPowerController extends Controller
             $mp->CUR_STATUS = $cur_status;
             $mp->save();
             // ✅ Update ALL_APPROVALS
-                DB::table('ALL_APPROVALS')
+            DB::table('ALL_APPROVALS')
                     ->where('CASEID', $case_id)
                     ->update([
                         'CUR_TASK'        =>  $cur_task,
@@ -1023,7 +1040,8 @@ class ManPowerController extends Controller
                   "CURRENT_USER"  =>  $cur_user,
                   "TASK_COUNT"    =>  $TASK_COUNT
             ]);
-            return response()->json([
+            return response()->json(
+            [
                 'message' => 'Approval was not YES; no further action taken.',
                 'case_id' => $case_id,
             ], 200);
@@ -1042,12 +1060,13 @@ class ManPowerController extends Controller
             // Find the record
             $mp = getManpowerData::where('CHILD_CASEID', $case_id)->firstOrFail();
             // Update approval status + remarks
-            $mp->SP_STATUS  = $data['approve'];
-            $mp->SP_DATE    = \Carbon\Carbon::now()->format('Y-m-d H:i:s');
-            $mp->SP_REM     = $request->input('spremarks');
-            $mp->CUR_TASK   = $cur_task;
-            $mp->CUR_USR    = $cur_user;
-            $mp->CUR_STATUS = $cur_status;
+            $mp->EVC_NAME     =  Auth::user()->Emp_Name;
+            $mp->EVC_STATUS   =  $data['approve'];
+            $mp->EVC_DATE     =  \Carbon\Carbon::now()->format('Y-m-d H:i:s');
+            $mp->EVC_REM      =  $request->input('spremarks');
+            $mp->CUR_TASK     =  $cur_task;
+            $mp->CUR_USR      =  $cur_user;
+            $mp->CUR_STATUS   =  $cur_status;
             $mp->save();
             // ✅ Update ALL_APPROVALS
             DB::table('ALL_APPROVALS')
@@ -1065,7 +1084,7 @@ class ManPowerController extends Controller
             //Particpants table here
              $old_tas_count = DB::table('participates')
             ->where('CASEID', $case_id)
-             ->orderBy('TASK_COUNT', 'desc')
+            ->orderBy('TASK_COUNT', 'desc')
             ->first();
             $TASK_COUNT = $old_tas_count ? $old_tas_count->TASK_COUNT + 1 : '';
             $participants =  new Participant();
@@ -1087,7 +1106,79 @@ class ManPowerController extends Controller
             ], 200);
         }
     }
-    public function ManPowerReqData()
+
+    //----------------------ManPowerRevertBack------------------------------------//
+    public function mrfRevertedSubmit(Request $request)
+    {
+       try 
+    {
+        $allprovals = AllApprovals::where('CASEID', $request->input('case_id'))->first();
+        \Log::info("ALLAPPROVALS:::", [$allprovals]);
+        $mrfFlowUpdate = getManpowerData::where('CHILD_CASEID', $request->input('case_id'))->first();
+        if ($mrfFlowUpdate && $allprovals) 
+        {
+            $mrfFlowUpdate->CUR_USR    = $allprovals->PREV_USR; 
+            $mrfFlowUpdate->CUR_STATUS = "TO_DO"; 
+            $mrfFlowUpdate->REMARKS =  $request->input('raiserremarks'); 
+            $mrfFlowUpdate->CUR_TASK   = ($mrfFlowUpdate->SP_STATUS == "REVERT")
+                                            ? "SP"
+                                            : (($mrfFlowUpdate->EVC_STATUS == "REVERT")?"EVC" :"");
+            $mrfFlowUpdate->save();   //✅save manpower data update
+        }
+     if ($allprovals) 
+        {
+            $allprovals->save();      //✅only works if AllApproval is an Eloquent model
+        }
+//Particpants table here
+  $old_tas_count = DB::table('participates')
+            ->where('CASEID', $request->input('case_id'))
+            ->orderBy('TASK_COUNT', 'desc')
+            ->first();
+    $TASK_COUNT = $old_tas_count ? $old_tas_count->TASK_COUNT + 1 : '';
+   Participant::create([
+    "CASEID"        => $request->input('case_id'),
+    "PROCESSNAME"   => "Manpower",
+    "TASK_NAME"     => ($mrfFlowUpdate->SP_STATUS == "REVERT")
+                        ? "SP"
+                        : (($mrfFlowUpdate->EVC_STATUS == "REVERT") ? "EVC" : ""),
+    "ACTION_UID"    => Auth::user()->Emp_Name,
+    "ACTION_STATUS" => "TO_DO",
+    "RAISER_DATE"   => $mrfFlowUpdate->RAISER_DATE,
+    "RECEIVED_DATE" => $mrfFlowUpdate->SP_DATE,
+    "RAISER"        => $mrfFlowUpdate->RAISER,
+    "CURRENT_USER"  => $allprovals->PREV_USR,
+     "TASK_COUNT"    =>$TASK_COUNT
+]);
+//----------------------------------All Approvals--------------------------------------//
+            DB::table('ALL_APPROVALS')
+                ->where('CASEID', $request->input('case_id'))
+                ->update([
+                    'CUR_TASK'        =>  ($mrfFlowUpdate->SP_STATUS == "REVERT")
+                                        ? "SP"
+                                        : (($mrfFlowUpdate->EVC_STATUS == "REVERT") ? "EVC" : "") ,
+                    'CUR_STATUS'      =>  "TO_DO",
+                    'CUR_USR'         =>  $allprovals->PREV_USR,
+                    "RAISER_DATE"     =>  $mrfFlowUpdate->RAISER_DATE,
+                    "RECEIVED_DATE"   =>  $mrfFlowUpdate->SP_DATE,
+                     "RAISER"         =>  $mrfFlowUpdate->RAISER,
+                    'LAST_MODIFIED'   =>  \Carbon\Carbon::now()->format('Y-m-d H:i:s'),
+                    'PREV_USR'        =>  Auth::user()->Emp_Name,
+            ]);
+    return response()->json([
+        "status"  => 200,
+        "message" => "MrfRevertedData Updated Successfully",
+        "success" => true
+    ]);
+    } catch (\Exception $e) {
+        \Log::error("Error in MrfRevertedData update: " . $e->getMessage());
+        return response()->json([
+            "status"  => 500,
+            "message" => "Something went wrong",
+            "success" => false
+        ]);
+    }
+    }
+    public function ManPowerReqData(Request $request)
     {
         try
         {
@@ -1103,7 +1194,7 @@ class ManPowerController extends Controller
     {
         try
         {
-           //-----------------------------------manPowerStationery------------------------------------------
+           //-----------------------------------manPowerStationery------------------------------------------//
            $statusHistory                      =  new HrManPowerStatusHistory();
            $statusHistory->status              =  $request->STATUS;  
            $statusHistory->EMPID               =  $request->EMPID;
@@ -1117,13 +1208,13 @@ class ManPowerController extends Controller
            $statusHistory->Transfer_Date       =  $request->Transfer_Date;
            $statusHistory->Remarks             =  $request->Remarks;
            $statusHistory->updated_by          =  Auth::user()->Emp_Name;
-        //    $statusHistory->Wip_Date            =  \Carbon\Carbon::now()->format('Y-m-d H:i:s');
-        //    $statusHistory->Joining_Date        =  $request->JoinDate;
-        //    $statusHistory->Reverted_Date       =  \Carbon\Carbon::now()->format('Y-m-d H:i:s'); 
-        //    $statusHistory->Transfer_Date       =  $request->Transfer_Date; 
+        // $statusHistory->Wip_Date            =  \Carbon\Carbon::now()->format('Y-m-d H:i:s');
+        // $statusHistory->Joining_Date        =  $request->JoinDate;
+        // $statusHistory->Reverted_Date       =  \Carbon\Carbon::now()->format('Y-m-d H:i:s'); 
+        // $statusHistory->Transfer_Date       =  $request->Transfer_Date; 
            $statusHistory->updated_date        =  \Carbon\Carbon::now()->format('Y-m-d H:i:s'); 
           if ($statusHistory->save()) 
-         {
+          {
             $plant_code = substr($statusHistory->Current_Plant, 0, 4);
             \Log::info("Plant_code :".$plant_code);
             if (in_array($statusHistory->status, ['Transfer', 'Joined'])) 
@@ -1143,7 +1234,7 @@ class ManPowerController extends Controller
                         {
                             $ActualDesignation->update(
                 [
-                                "Availability" => $ActualDesignation->Availability-1,
+                                "Availability"       => $ActualDesignation->Availability-1,
                                 "Actual_Requirement" => $ActualDesignation->Total_Requirement-($ActualDesignation->Availability - 1)
                             ]);
                         } 
@@ -1161,7 +1252,7 @@ class ManPowerController extends Controller
                         } 
                         else 
                         {
-                            \Log::error("updateMNP not found for Transfer. Plant: {$plant_code}, Designation: {$statusHistory->current_designation}");
+                               \Log::error("updateMNP not found for Transfer. Plant: {$plant_code}, Designation: {$statusHistory->current_designation}");
                         }
                     }
                     else if ($statusHistory->status == "Joined")
@@ -1180,11 +1271,11 @@ class ManPowerController extends Controller
                     }
             }
         }
-           //ManPower Update the ManPower here ------
-           $maPowerUpdated         = getManpowerData::where('CHILD_CASEID',$statusHistory->child_caseid)->first();
-           $maPowerUpdated->STATUS = $request->STATUS;  
-           $maPowerUpdated->EMPID  = $request->EMPID;
-           $maPowerUpdated->HR     = Auth::user()->Emp_Name; 
+           //-------------------ManPower Update the ManPower here=============------
+           $maPowerUpdated                      =  getManpowerData::where('CHILD_CASEID',$statusHistory->child_caseid)->first();
+           $maPowerUpdated->STATUS              =  $request->STATUS;  
+           $maPowerUpdated->EMPID               =  $request->EMPID;
+           $maPowerUpdated->HR                  =  Auth::user()->Emp_Name; 
            $maPowerUpdated->Wip_Date            =  \Carbon\Carbon::now()->format('Y-m-d H:i:s');
            $maPowerUpdated->Joining_Date        =  $request->JoinDate;
            $maPowerUpdated->Reverted_Date       =  \Carbon\Carbon::now()->format('Y-m-d H:i:s'); 
@@ -1194,7 +1285,7 @@ class ManPowerController extends Controller
              if( $maPowerUpdated->STATUS === "Reverted") 
              {
                 DB::table('ALL_APPROVALS')
-                ->where('CASEID', $maPowerUpdated->CHILD_CASEID)
+               ->where('CASEID', $maPowerUpdated->CHILD_CASEID)
                 ->update([
                     'CUR_TASK'        =>  "Raiser",
                     'CUR_STATUS'      =>  "TO_DO",
@@ -1209,11 +1300,11 @@ class ManPowerController extends Controller
         {
             return response()->json(["status" => 500, 
             "message" => "Internal Server Error", 
-            "error" => $e->getMessage()]);
+            "error"   => $e->getMessage()]);
         }
     }
-
-    public function mrfStatusHistory(Request $request){
+    public function mrfStatusHistory(Request $request)
+    {
         try
         {   
            $manPowerStatusHistory = HrManPowerStatusHistory::where('child_caseid',$request->childCaseId)->get();
@@ -1223,17 +1314,20 @@ class ManPowerController extends Controller
                "message" => "Mrf Status History Successfully",
                "success" => true,
                'Mrfdata' => $manPowerStatusHistory
-               ]);
+               ]
+            );
         }
         catch(\Exception $e)
         {
             return response()->json([
             "status"  => 500,
             "message" => "Internal Server Error",
-            "success" => false]);
+            "success" => false
+        ]);
         }
     }
-    public function manpowerCloseStatus(Request $request){
+    public function manpowerCloseStatus(Request $request)
+    {
     try
       {
          DB::table('ALL_APPROVALS')
@@ -1248,7 +1342,7 @@ class ManPowerController extends Controller
             return response()->json(["status"=>500,"message"=>"Internal Server Error",'error'=>$e->getMessage()]);
         }
     }
-    //---------->>>>>--------ManPower Upload Data Update------------------>>>>>>>>>>>>>>>>>>>>>>>>
+    //------------------ManPower Upload Data Update------------------
 public function mrfUploadDataUpdate(Request $request)
    {
     \Log::info("REquest Data:".$request); 
@@ -1262,13 +1356,13 @@ public function mrfUploadDataUpdate(Request $request)
                 "message" => "MRF record not found"
             ]);
         }
-        $totalRequirement = $request->Total_Requirement;
-        $availability = $manPowerUploadUpdate->Availability ?? 0;
+        $totalRequirement  = $request->Total_Requirement;
+        $availability      = $manPowerUploadUpdate->Availability ?? 0;
         $actualRequirement = $totalRequirement - $availability;
         $manPowerUploadUpdate->update([
-            "Total_Requirement" => $totalRequirement,
-            "Actual_Requirement" => $actualRequirement, // ✅ Ensure DB field is correct
-            "Emp_Name" => Auth::user()->Emp_Name
+            "Total_Requirement"   => $totalRequirement,
+            "Actual_Requirement"  => $actualRequirement, // ✅ Ensure DB field is correct
+            "Emp_Name"            => Auth::user()->Emp_Name
         ]);
         return response()->json([
             "status" => 200,
@@ -1289,24 +1383,24 @@ public function overallMrfStatusCount(Request $request)
 {
     try
     {
-     $results = DB::table('manpower_requests')
+    $results = DB::table('manpower_requests')
         ->select(
             'PLANT',
             DB::raw("COUNT(CASE WHEN status = 'Transfer' THEN 1 END) AS Transferred"),
             DB::raw("COUNT(CASE WHEN status = 'Reverted' THEN 1 END) AS Reverted"),
-            DB::raw("COUNT(CASE WHEN status = 'Joined' THEN 1 END) AS Joined"),
-            DB::raw("COUNT(CASE WHEN status = 'WIP' THEN 1 END) AS WIP"),
-            DB::raw("COUNT(CASE WHEN status = 'TO_DO' THEN 1 END) as Pending"),
+            DB::raw("COUNT(CASE WHEN status = 'Joined'   THEN 1 END) AS Joined"),
+            DB::raw("COUNT(CASE WHEN status = 'WIP'      THEN 1 END) AS WIP"),
+            DB::raw("COUNT(CASE WHEN status = 'TO_DO'    THEN 1 END) as Pending"),
             DB::raw("COUNT(*) as RaiserCount"),
            )
     ->groupBy('PLANT')
     ->orderBy('PLANT')
     ->get();
     $overallCounts = DB::table('manpower_requests')
-    ->select(
+   ->select(
         DB::raw("COUNT(CASE WHEN status = 'Transfer' THEN 1 END) AS Transfer"),
-        DB::raw("COUNT(CASE WHEN status = 'Reverted' THEN 1 END) AS Reverted"),
-        DB::raw("COUNT(CASE WHEN status = 'WIP' THEN 1 END) AS WIP"),
+        DB::raw("COUNT(CASE WHEN status = 'Reverted'          THEN 1 END) AS Reverted"),
+        DB::raw("COUNT(CASE WHEN status = 'WIP'               THEN 1 END) AS WIP"),
         DB::raw("COUNT(CASE WHEN status = 'Joined' THEN 1 END) AS Joined"),
         DB::raw("COUNT(CASE WHEN status = 'TO_DO' THEN 1 END) AS Pending"),
         DB::raw("COUNT(CASE WHEN EVC_STATUS = 'Approve' THEN 1 END) AS Approval"),
@@ -1315,37 +1409,36 @@ public function overallMrfStatusCount(Request $request)
     ->first();
     return response()->json([
          "status"                => 200,
-         "message"              => "Mrf Status Fetched Successfully",
-         'PlantWiseStatusCount' => $results,
-         "OverStatusCount"      => $overallCounts
+         "message"               => "Mrf Status Fetched Successfully",
+         'PlantWiseStatusCount'  => $results,
+         "OverStatusCount"       => $overallCounts
     ]);
     }
     catch(\Exception $e)
     {
         return response()->json(["status"=>500,"error"=>"Internal Server Error","message"=>$e->getMessage()]);
     }
-
 }
 private function diffInRoundedDays(?Carbon $start, ?Carbon $end): ?int
 {
-    if (!$start || !$end) {
+    if (!$start || !$end) 
+    {
         return null;
     }
     // If both dates are the same calendar day → return 0
-    if ($start->isSameDay($end)) {
+    if ($start->isSameDay($end)) 
+    {
         return 0;
     }
-    // Round to nearest day
+   // Round to nearest day
     $seconds = abs($end->diffInSeconds($start, false));
     return (int) round($seconds / 86400);
 }
 
-
-
 public function agingAnalaysisAprlvs(Request $request)
 {
-try 
- {
+  try 
+    {
     $records = DB::table('manpower_requests')->get();
     $grouped = $records->groupBy('PLANT')->map(function ($items, $plant) 
     {
@@ -1398,7 +1491,7 @@ if ($dates['HO_HOD_DATE']) {
     {
         $allDelayKeys = $children->flatMap(fn($c) => array_keys($c['delays']))->unique();
             foreach ($allDelayKeys as $key) 
-                {
+            {
                 $values = $children->map(fn($c) => $c['delays'][$key] ?? null)
                                 ->filter(fn($v) => $v !== null)
                                 ->toArray();
@@ -1406,11 +1499,11 @@ if ($dates['HO_HOD_DATE']) {
             }
     }
     return [
-       'PLANT'                => $plant,
-       'plant_average_delays' => $plantDelays, 
-       'children'             => $children,
-    ];
-   })->values();
+          'PLANT'                => $plant,
+          'plant_average_delays' => $plantDelays, 
+          'children'             => $children,
+       ];
+     })->values();
         return response()->json([
             "status"  => 200,
             "message" => "Data Fetched Successfully",
@@ -1426,8 +1519,6 @@ if ($dates['HO_HOD_DATE']) {
         ]);
     }
 }
-
-
 public function agingHRAnalaysis()
 {
     try 
@@ -1452,20 +1543,20 @@ public function agingHRAnalaysis()
                     ->filter()
                     ->avg();
                 return [
-                        "CASEID"         => $record->CASEID ,
+                        "CASEID"         => $record->CASEID        ,
                         "CHILD_CASEID"   => $record->CHILD_CASEID  ,
                         "RAISER"         => $record->RAISER        ,
                         "MANPOWER_DESG"  => $record->MANPOWER_DESG ,
                         "STATUS"         => $record->STATUS        ,
                         "delays"         => 
-                    [
-                        "WIP"      => $wipDays      !== null ? round($wipDays) : null,
-                        "Joined"   => $joinedDays   !== null ? round($joinedDays) : null,
-                        "Transfer" => $transferDays !== null ? round($transferDays) : null,
-                        "Reverted" => $revertedDays !== null ? round($revertedDays) : null,
-                        "Average"  => $avg          !== null ? round($avg) : null,
-                    ]
-                ];
+                        [
+                            "WIP"      => $wipDays      !== null ? round($wipDays)    : null,
+                            "Joined"   => $joinedDays   !== null ? round($joinedDays) : null,
+                            "Transfer" => $transferDays !== null ? round($transferDays) : null,
+                            "Reverted" => $revertedDays !== null ? round($revertedDays) : null,
+                            "Average"  => $avg          !== null ? round($avg) : null,
+                        ]
+                      ];
             });
             // plant level averages
           $plantAverages = [
@@ -1475,25 +1566,25 @@ public function agingHRAnalaysis()
                                 "Reverted" => round($children->pluck('delays.Reverted')->filter()->avg()),
                            ];
        // Calculate overall average of the above 4
-            $values = array_filter([
+        $values = array_filter([
                 $plantAverages["WIP"],
                 $plantAverages["Joined"],
                 $plantAverages["Transfer"],
                 $plantAverages["Reverted"],
             ]);
          $plantAverages["Average"] = count($values) ? round(array_sum($values) / count($values)) : 0;
-            return 
-            [
-                "PLANT"                => $plantName,
-                "plant_average_delays" => $plantAverages,
-                "children"             => $children,
-            ];
-        })->values();
-        return response()->json([
-            "status" => 200,
-            "message" => "Data Fetched Successfully",
-            "data" => $grouped
-        ]);
+                return 
+                [
+                    "PLANT"                => $plantName,
+                    "plant_average_delays" => $plantAverages,
+                    "children"             => $children,
+                ];
+          })->values();
+            return response()->json([
+                "status" => 200,
+                "message" => "Data Fetched Successfully",
+                "data" => $grouped
+            ]);
     }
      catch (\Exception $e) 
     {
@@ -1510,7 +1601,8 @@ public function filterOverallCountDesgni(Request $request)
     try 
     {
       $filterData = DB::table('man_power_upload as mpu')
-        ->leftJoin('manpower_requests as mr', function ($join) {
+        ->leftJoin('manpower_requests as mr', function ($join) 
+        {
             $join->on('mpu.Plant_code', '=', 'mr.PLANT')
                 ->on('mpu.Designation', '=', 'mr.MANPOWER_DESG');
         })
@@ -1579,4 +1671,27 @@ public function filterOverallCountDesgni(Request $request)
         ]);
     }
 }
+ public function mrfUploadData(Request $request){
+
+    try
+    {
+    //\Log::info("REquestData:::::;",$request->all());
+        $mrfData =   new ManPowerUpload();
+        $mrfData->Plant_code=$request->input('Plant_code');
+        $mrfData->Designation=$request->input('Designation');
+        $mrfData->Department=$request->input('Department');
+        $mrfData->Total_Requirement=$request->input('Total_Requirement');
+        $mrfData->Availability=$request->input('Availability');
+        $mrfData->Actual_Requirement=$request->input('Actual_Requirement');
+        $mrfData->Emp_Name = Auth::user()->Emp_Name;
+        $mrfData->save();
+        return response()->json(["status"=>201,"message"=>"Mrf Data Saved Through Form","success"=>true]);
+
+    }catch(\Exception $e)
+    {
+        return response()->json(["status"=>500,"message"=>"Mrf Data is not uploaded","success"=>false]);
+    }
 }
+}
+
+

@@ -2,6 +2,8 @@
 namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\EmpDetails;
+use App\Models\emp_mhc_projects;
+use App\Models\mhc_projects;
 use Illuminate\Support\Facades\Hash;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
@@ -12,7 +14,6 @@ class AuthController extends Controller
         $user = EmpDetails::create(
         [
             'Legacy_Id' => $request->EMP_ID,
-            //'password' => Hash::make($request->password),
             'Password' => $request->password
         ]
     );
@@ -25,27 +26,12 @@ class AuthController extends Controller
         );
     }
 
-    // public function login(Request $request) 
-    // {
-    //     $credentials = $request->only('EMP_ID','password');
-    //    // dd($credentials['username']);
-    //     if (!$token = JWTAuth::attempt($credentials)) 
-    //     {
-    //         return response()->json(['error' => 'Invalid credentials'], 401);
-    //     }
 
-    //     return response()->json([
-    //         'token' => $token,
-    //         'user' => $user
-    //     ]);
-
-    // }
 
     public function login(Request $request)
     {
         $credentials = $request->only('username','password');
-        // Get user from DB by username
-        // Get user from DB by case-insensitive EMP_ID
+
         $user = EmpDetails::whereRaw('LOWER(Legacy_Id) = ?', 
         [strtolower($credentials['username'])])->first();
         if (!$user) 
@@ -54,7 +40,7 @@ class AuthController extends Controller
                 ['error'=>'User not found']
                 ,404);
         }
-        // Manually compare plain-text passwords
+ 
         if (strcasecmp($credentials['password'], $user->Password) === 0)
         {
             // Password matched (you can return JWT token here)
@@ -69,7 +55,7 @@ class AuthController extends Controller
                            "Email"         => $user->Email_Id,
                            "Is_Employee"   => $user->Is_Employee,
                            "Emp_Category"  => $user->Emp_Category
-                        ]
+                        ],
                 ]
             );
         }

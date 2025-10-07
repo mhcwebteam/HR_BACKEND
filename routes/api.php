@@ -7,15 +7,25 @@ use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ManPowerController;
 use App\Http\Controllers\UserController;
-
+use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\ReminderController;
 
     Route::post('register',            [AuthController::class, 'register']);
     Route::post('login'   ,            [AuthController::class, 'login'   ]);
     Route::middleware('auth:api')->group(function ()
    {
-    //---------------------------<<<>>>ManPowerDetails<<<>>>------------------------------
+   //------------------------ new changes-----------------
+
+      Route::get('/users',              [UserController::class, 'getUsers']);
+
+      Route::get('project', [ProjectController::class, 'getUserProjects']);
+      
+      Route::get('subProject/{project_name}', [ProjectController::class, 'getSubProjects']);
+    
+         //---------------------------<<<>>>ManPowerDetails<<<>>>------------------------------
     Route::get('profile',              [AuthController::class, 'profile']);
     Route::post('logout',              [AuthController::class, 'logout']);
+   
     Route::get('getData',              [StationaryController::class,'getStationaryData']);
     Route::post('emp-stationary-store',[StationaryController::class,'empStationaryStore']);
     Route::post('post-data',           [StationaryController::class,'storeData']);
@@ -54,6 +64,7 @@ use App\Http\Controllers\UserController;
     Route::post('fetch-gpnum', [ManpowerController::class, 'fetchGpnum']);
     Route::post('mrfUploadDataUpdate',[ManpowerController::class, 'mrfUploadDataUpdate']);
     Route::get('overallMrfStatusCount',[ManPowerController::class,"overallMrfStatusCount"]);
+    Route::post('mrf-Upload-data',      [ManPowerController::class,'mrfUploadData']);
 
     //---------------Get the Plant Againast SubPlants Data------------------------
     Route::get('agingAnalaysisAprvls',[ManPowerController::class,"agingAnalaysisAprlvs"]);
@@ -61,3 +72,6 @@ use App\Http\Controllers\UserController;
     Route::get('filterOverallCount',action: [ManPowerController::class,'filterOverallCountDesgni']);
   });
 
+// -----notifications--------
+
+Route::post('send-reminder', [ReminderController::class, 'sendReminder']);
