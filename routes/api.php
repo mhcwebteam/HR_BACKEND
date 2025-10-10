@@ -9,6 +9,10 @@ use App\Http\Controllers\ManPowerController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ReminderController;
+use Illuminate\Http\Request;
+use App\Http\Controllers\RecruitmentController;
+use App\Http\Controllers\VerificationController;
+
 
     Route::post('register',            [AuthController::class, 'register']);
     Route::post('login'   ,            [AuthController::class, 'login'   ]);
@@ -72,6 +76,20 @@ use App\Http\Controllers\ReminderController;
     Route::get('filterOverallCount',action: [ManPowerController::class,'filterOverallCountDesgni']);
   });
 
+
+  //-----------------recuritment------------------------------------------------------------
+
+Route::get('/verifications', [VerificationController::class, 'index']);
+Route::get('/verifications/{id}', [VerificationController::class, 'show']); 
+Route::post('/verifications', [VerificationController::class, 'store']); 
+
 // -----notifications--------
 
-Route::post('send-reminder', [ReminderController::class, 'sendReminder']);
+
+// Route::post('send-onboarding-link', [RecruitmentController::class, 'sendOnboardingLink']);
+// Route::post('submit-onboarding-form', [RecruitmentController::class, 'submitOnboardingForm']);
+
+Route::get('verify-getData',[VerificationController::class,"verificationGetData"]); 
+    Route::post('recruitStore',[VerificationController::class,'recruitStore']);
+
+
