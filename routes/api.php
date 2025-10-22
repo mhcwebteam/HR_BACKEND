@@ -14,6 +14,8 @@ use App\Http\Controllers\RecruitmentController;
 use App\Http\Controllers\VerificationController;
 
 
+
+
     Route::post('register',            [AuthController::class, 'register']);
     Route::post('login'   ,            [AuthController::class, 'login'   ]);
     Route::middleware('auth:api')->group(function ()
@@ -74,9 +76,15 @@ use App\Http\Controllers\VerificationController;
     Route::get('agingAnalaysisAprvls',[ManPowerController::class,"agingAnalaysisAprlvs"]);
     Route::get('agingHRAnalaysis',[ManPowerController::class,"agingHRAnalaysis"]);
     Route::get('filterOverallCount',action: [ManPowerController::class,'filterOverallCountDesgni']);
+    Route::get('verify-getData',[VerificationController::class,"verificationGetData"]); 
+      Route::get('emp-verify-data',    [VerificationController::class,'empVerificationData']);
+    Route::post('recruitStore',[VerificationController::class,'recruitStore']);
+  Route::post('emp-email',[VerificationController::class,'empSendMail']);
+     Route::post('verify-update',[VerificationController::class,'verificationStatusUpdate']);
+
   });
-
-
+   
+ 
   //-----------------recuritment------------------------------------------------------------
 
 Route::get('/verifications', [VerificationController::class, 'index']);
@@ -89,7 +97,6 @@ Route::post('/verifications', [VerificationController::class, 'store']);
 // Route::post('send-onboarding-link', [RecruitmentController::class, 'sendOnboardingLink']);
 // Route::post('submit-onboarding-form', [RecruitmentController::class, 'submitOnboardingForm']);
 
-Route::get('verify-getData',[VerificationController::class,"verificationGetData"]); 
-    Route::post('recruitStore',[VerificationController::class,'recruitStore']);
+  
 
 

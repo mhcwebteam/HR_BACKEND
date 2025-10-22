@@ -10,7 +10,7 @@ class Verification extends Model
     use HasFactory;
 
     protected $table = 'verification';
-
+    protected $primaryKey="verification_id";
     protected $fillable = [
         'NAME',
         'EMAIL', 
@@ -18,14 +18,19 @@ class Verification extends Model
         'AADHAR_NUM',
         'AADHAR_PATH',
         'PAN_NUM',
+        'CASEID',
+        'CHILD_CASEID',
+        'PLANT',
+        'DEPT',
         'PAN_PATH',
         'SSC_MARKS',
         'INTER_MARKS',
         'BTECH_MARKS',
-        'TENTH_FILENAME',  // Renamed from 10TH_FILENAME
+        '10TH_FILENAME',
         'INTER_FILENAME', 
         'BTECH_FILENAME',
         'PG_MARKS',
+         'PG_PATH',
         'PHONE_NUMBER',
         'DOB',
         'CURRENT_CTC',
